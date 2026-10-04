@@ -27,7 +27,7 @@ function doGet() {
 /* ---------- API called from Index.html ---------- */
 
 function getData() {
-  return { shot: read_('shot'), team: read_('team'), sl1: read_('sl1'), notes: readNotes_(), media: readMedia_() };
+  return { shot: read_('shot'), team: read_('team'), sl1: read_('sl1'), notes: readNotes_(), media: readMedia_(), lyrics: readLyrics_() };
 }
 
 /* ---------- Audio tab: anyone can upload audio/video; only admins delete ---------- */
@@ -164,6 +164,53 @@ function adminPasswords_() {
   const prop = PropertiesService.getScriptProperties().getProperty('NOTES_PASSWORD');
   if (prop) list.push(String(prop).trim());
   return list;
+}
+
+/* ---------- Script & Lyrics (Audio tab, under the main song): everyone reads, admins write ---------- */
+
+const LYRIC_HEADERS = ['ID', 'Title', 'Text', 'Type', 'Updated', 'Created'];
+
+function saveLyric(token, item) {
+  checkAdmin_(token);
+  return withLock_(() => {
+    const sh = lyricsSheet_();
+    const now = "'" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
+    const title = String(item.title || '').slice(0, 200), text = String(item.text || '').slice(0, 45000);
+    const type = item.type === 'Script' ? 'Script' : 'Lyrics';
+    if (!title.trim() && !text.trim()) throw new Error('Write a title or some text first.');
+    const at = item.id ? findNote_(sh, item.id) : 0;
+    if (at) sh.getRange(at, 2, 1, 4).setValues([[title, text, type, now]]);
+    else sh.appendRow([Utilities.getUuid().slice(0, 8), title, text, type, now, now]);
+    return readLyrics_();
+  });
+}
+
+function deleteLyric(token, id) {
+  checkAdmin_(token);
+  return withLock_(() => {
+    const sh = lyricsSheet_(), at = findNote_(sh, id);
+    if (at) sh.deleteRow(at);
+    return readLyrics_();
+  });
+}
+
+function lyricsSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName('LYRICS');
+  if (!sh) {
+    sh = ss.insertSheet('LYRICS');
+    sh.getRange(1, 1, 1, LYRIC_HEADERS.length).setValues([LYRIC_HEADERS]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function readLyrics_() {
+  const sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('LYRICS');
+  if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, LYRIC_HEADERS.length).getDisplayValues()
+    .filter(r => r[0])
+    .map(r => ({ id: r[0], title: r[1], text: r[2], type: r[3] || 'Lyrics', updated: r[4], created: r[5] }));
 }
 
 function checkAdmin_(token) {

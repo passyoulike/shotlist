@@ -149,6 +149,20 @@
   .media-info span{font-size:12px;color:var(--muted)}
   .media-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 
+  /* Script & Lyrics */
+  .lyrics{margin-bottom:14px;display:flex;flex-direction:column;gap:10px}
+  .lyr-tools .unlock input{width:150px}
+  .lyr-editor{display:flex;flex-direction:column;gap:6px;border:1px dashed var(--line);border-radius:10px;padding:10px}
+  .lyr{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .lyr.open{border-color:var(--brand)}
+  .lyr-head{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;background:#fafbfc}
+  .lyr-head b{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lyr-meta{font-size:11px;color:var(--muted)}
+  .lyr-caret{color:var(--muted)}
+  .lyr-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:99px;background:var(--brand-soft);color:var(--brand)}
+  .lyr-badge.script{background:#fff4e6;color:var(--accent)}
+  .lyr-text{padding:12px 14px;max-height:420px;overflow:auto;line-height:1.6;font-size:15px}
+
   /* Notes */
   .btn.danger{color:var(--skip);border-color:#f3c4c4}
   .btn.small{padding:4px 10px;font-size:12px}
@@ -599,7 +613,7 @@ function renderNotes() {
     </div>` : '';
   const lock = ADMIN
     ? `<button class="btn primary" data-note="new">+ New note</button><button class="btn" data-note="lock" title="Lock admin editing">🔓 Admin · Lock</button>`
-    : `<form class="unlock" data-unlock><input type="password" id="admin-pw" placeholder="Admin password" autocomplete="current-password"><button class="btn">🔒 Unlock</button></form>`;
+    : `<form class="unlock" data-unlock><input type="password" placeholder="Admin password" autocomplete="current-password"><button class="btn">🔒 Unlock</button></form>`;
   $('#tab-notes').innerHTML = `
     <div class="toolbar">
       <input type="search" placeholder="Search notes…" data-notesearch value="${esc(NOTE_Q)}">
@@ -610,6 +624,7 @@ function renderNotes() {
     <div id="notes-list"></div>`;
   renderNoteList();
   if ($('#media-list')) renderMediaList(); // admin Delete buttons on uploads follow the lock state
+  if ($('#lyrics-box')) renderLyrics();
 }
 
 function renderNoteList() {
@@ -633,13 +648,13 @@ function renderNoteList() {
 document.addEventListener('submit', async e => {
   if (!e.target.matches('[data-unlock]')) return;
   e.preventDefault();
-  const pw = $('#admin-pw').value;
+  const pwInput = e.target.querySelector('input[type=password]'), pw = pwInput.value;
   if (!pw) return;
   try {
     ADMIN = await save('adminLogin', [pw]);
     try { sessionStorage.setItem('admin', ADMIN); } catch (_) {}
     renderNotes(); toast('Admin unlocked');
-  } catch (_) { $('#admin-pw').value = ''; }
+  } catch (_) { pwInput.value = ''; }
 });
 
 document.addEventListener('click', async e => {
@@ -702,6 +717,7 @@ function renderAudio() {
           <a class="btn small" href="${driveView(MAIN_SONG_ID)}" target="_blank" rel="noopener">Open in Drive ↗</a></div>
         <iframe class="song-frame" src="${drivePreview(MAIN_SONG_ID)}" allow="autoplay" title="Main song"></iframe>
       </div>
+      <div id="lyrics-box"></div>
       <div id="media-player"></div>
       <div class="card upload-card">
         <h3>Upload audio or video</h3>
@@ -718,7 +734,88 @@ function renderAudio() {
       <div id="media-list"></div>`;
   }
   renderMediaList();
+  if (!LYR_EDIT) renderLyrics();
 }
+
+/* ---------- Script & Lyrics under the main song: everyone reads, admins add / edit / delete ---------- */
+let LYR_EDIT = null; // the item being edited ({} for a new one)
+let LYR_OPEN = null; // id of the item expanded for reading
+
+function renderLyrics() {
+  const items = DATA.lyrics || [];
+  if (!LYR_OPEN && items.length) LYR_OPEN = items[0].id;
+  const editor = LYR_EDIT ? `<div class="lyr-editor">
+      <div class="note-row">
+        <div><label class="lbl">Title</label><input id="lyr-title" value="${esc(LYR_EDIT.title)}" placeholder="e.g. Main song lyrics, VO script take 2"></div>
+        <div style="flex:0 1 160px"><label class="lbl">Type</label>
+          <select id="lyr-type"><option ${LYR_EDIT.type !== 'Script' ? 'selected' : ''}>Lyrics</option><option ${LYR_EDIT.type === 'Script' ? 'selected' : ''}>Script</option></select></div>
+      </div>
+      <label class="lbl">Text</label>
+      <textarea id="lyr-text" rows="12" placeholder="Paste the lyrics or script here…">${esc(LYR_EDIT.text)}</textarea>
+      <div class="note-actions">
+        ${LYR_EDIT.id ? '<button class="btn danger" data-lyr="delete">Delete</button>' : ''}
+        <span style="flex:1"></span>
+        <button class="btn" data-lyr="cancel">Cancel</button>
+        <button class="btn primary" data-lyr="save">Save</button>
+      </div>
+    </div>` : '';
+  const list = items.map(it => {
+    const open = it.id === LYR_OPEN;
+    return `<article class="lyr ${open ? 'open' : ''}">
+      <div class="lyr-head" data-lyr="toggle" data-id="${esc(it.id)}">
+        <span class="lyr-badge ${it.type === 'Script' ? 'script' : ''}">${esc(it.type)}</span>
+        <b>${esc(it.title || 'Untitled')}</b>
+        <span class="lyr-meta">${esc(it.updated)}</span>
+        ${ADMIN ? `<button class="btn small" data-lyr="edit" data-id="${esc(it.id)}">Edit</button>` : ''}
+        <span class="lyr-caret">${open ? '▾' : '▸'}</span>
+      </div>
+      ${open ? `<div class="lyr-text">${linkify(it.text)}</div>` : ''}
+    </article>`;
+  }).join('');
+  $('#lyrics-box').innerHTML = `<div class="card lyrics">
+    <div class="song-head"><h2>📝 Script &amp; Lyrics</h2>
+      <div class="lyr-tools">${ADMIN
+        ? (LYR_EDIT ? '' : '<button class="btn small primary" data-lyr="new">+ Add script / lyrics</button>')
+        : '<form class="unlock" data-unlock><input type="password" placeholder="Admin password" autocomplete="current-password"><button class="btn small">🔒 Unlock to edit</button></form>'}</div>
+    </div>
+    ${editor}
+    ${list || (LYR_EDIT ? '' : '<div class="hint">No script or lyrics yet.</div>')}
+  </div>`;
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-lyr]');
+  if (!b) return;
+  const act = b.dataset.lyr;
+  if (act === 'toggle') {
+    if (e.target.closest('button')) return; // the Edit button inside the header handles itself
+    LYR_OPEN = LYR_OPEN === b.dataset.id ? '' : b.dataset.id;
+    return renderLyrics();
+  }
+  if (act === 'new') { LYR_EDIT = { title: '', text: '', type: 'Lyrics' }; return renderLyrics(); }
+  if (act === 'edit') { LYR_EDIT = { ...((DATA.lyrics || []).find(x => x.id === b.dataset.id) || {}) }; return renderLyrics(); }
+  if (act === 'cancel') { LYR_EDIT = null; return renderLyrics(); }
+  const call = async (fn, args) => {
+    try { return await save(fn, args); }
+    catch (err) {
+      if (/expired/i.test(err && err.message)) { ADMIN = null; try { sessionStorage.removeItem('admin'); } catch (_) {} renderNotes(); }
+      return null;
+    }
+  };
+  if (act === 'save') {
+    const item = { id: LYR_EDIT.id, title: $('#lyr-title').value, type: $('#lyr-type').value, text: $('#lyr-text').value };
+    const res = await call('saveLyric', [ADMIN, item]);
+    if (res) {
+      DATA.lyrics = res; LYR_EDIT = null;
+      LYR_OPEN = item.id || (res[res.length - 1] || {}).id;
+      renderLyrics(); toast('Saved');
+    }
+  }
+  if (act === 'delete' && confirm('Delete this script / lyrics?')) {
+    const res = await call('deleteLyric', [ADMIN, LYR_EDIT.id]);
+    if (res) { DATA.lyrics = res; LYR_EDIT = null; LYR_OPEN = null; renderLyrics(); toast('Deleted'); }
+  }
+});
 
 function renderMediaList() {
   const list = (DATA.media || []).slice().reverse();
@@ -1022,7 +1119,7 @@ document.addEventListener('input', e => {
 // Keep everyone in sync on shoot day: quiet refresh every 60s when nobody is typing.
 setInterval(() => {
   const a = document.activeElement;
-  if (!document.hidden && !pending && !PICK && !LB && !EDITING && FAC_EDIT === null && !(a && a.matches('input,textarea,select'))) load(true);
+  if (!document.hidden && !pending && !PICK && !LB && !EDITING && FAC_EDIT === null && !LYR_EDIT && !(a && a.matches('input,textarea,select'))) load(true);
 }, 60000);
 
 try {
@@ -1046,7 +1143,8 @@ const MOCK = (() => {
     team: { key: 'team', sheet: 'TEAM', headers: ['Name', 'Role', 'Contact No.', 'Email', 'Assignment', 'Notes'], rows: [] },
     sl1: { key: 'sl1', sheet: 'SL 1', headers: ['Shot #', 'Time', 'Location', 'Shot Description', 'Shot Type', 'Camera / Angle', 'Subject / Talent', 'Assigned To', 'Status', 'Notes'], rows: [] },
     notes: [],
-    media: []
+    media: [],
+    lyrics: []
   };
   let noteId = 0;
   const stamp = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -1066,6 +1164,13 @@ const MOCK = (() => {
         size: Math.round(b64.length * 0.75 / 104857.6) / 10, by: info.by, uploaded: stamp(), driveId: MAIN_SONG_ID });
       return ok(JSON.parse(JSON.stringify(db.media)));
     },
+    saveLyric: (t, it) => {
+      const ex = db.lyrics.find(x => x.id === it.id);
+      if (ex) Object.assign(ex, it, { updated: stamp() });
+      else db.lyrics.push({ ...it, id: 'l' + (++noteId), updated: stamp(), created: stamp() });
+      return ok(JSON.parse(JSON.stringify(db.lyrics)));
+    },
+    deleteLyric: (t, id) => { db.lyrics = db.lyrics.filter(x => x.id !== id); return ok(JSON.parse(JSON.stringify(db.lyrics))); },
     deleteMedia: (t, id) => { db.media = db.media.filter(x => x.id !== id); return ok(JSON.parse(JSON.stringify(db.media))); },
     deleteNote: (t, id) => { db.notes = db.notes.filter(x => x.id !== id); return ok(JSON.parse(JSON.stringify(db.notes))); },
     updateCell: (k, r, c, v) => { const x = db[k].rows.find(y => y.row === r); if (x) x.cells[c - 1] = v; return ok(true); },
