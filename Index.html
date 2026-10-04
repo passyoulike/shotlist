@@ -74,6 +74,9 @@
   select.status.v-skipped,select.status.v-reshoot{color:var(--skip)}
 
   /* Category chips + photo board */
+  .catbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-bottom:12px}
+  .catbar .lbl{margin:0}
+  .catbar select{flex:0 1 320px;width:auto;min-width:200px;font-weight:600}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
   .chip{border:1px solid var(--line);background:#fff;border-radius:99px;padding:7px 14px;font:inherit;font-weight:600;cursor:pointer}
   .chip span{font-size:11px;color:var(--muted);margin-left:4px}
@@ -367,16 +370,29 @@ function renderBoard(d, rows, pcols, catOf) {
   </div>`;
 }
 
+// Category field on an edit card: existing categories, plus a blank (inherits the slot above) and "+ New category…".
+function catSelect(r, ci, names) {
+  const v = String(r.cells[ci] || '').trim();
+  const opts = ['', ...uniq([...names, v])].map(o =>
+    `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${o ? esc(o) : '— same as slot above —'}</option>`).join('');
+  return `<select data-k="shot" data-r="${r.row}" data-c="${ci + 1}" data-catfield ${r.locked[ci] ? 'disabled' : ''}>
+    ${opts}<option value="${NEW_CAT}">+ New category…</option></select>`;
+}
+const NEW_CAT = '__new__';
+
 function renderShot() {
   const d = DATA.shot, si = col(d, 'status'), ni = col(d, 'notes'), ci = col(d, 'category');
   const done = d.rows.filter(r => r.cells[si] === 'Done').length;
   const cats = shotCats(d), names = uniq(cats), pcols = photoCols(d);
   // CAT: '' = every time slot's photos on one page, a category name = only that category, EDIT = the editable slot list.
   if (CAT && CAT !== EDIT && !names.includes(CAT)) CAT = '';
-  const chips = `<div class="chips">
-      <button class="chip ${CAT ? '' : 'on'}" data-cat="">All</button>
-      ${names.map(n => `<button class="chip ${n === CAT ? 'on' : ''}" data-cat="${esc(n)}">${esc(n)}<span>${cats.filter(c => c === n).length}</span></button>`).join('')}
-      <button class="chip ${CAT === EDIT ? 'on' : ''}" data-cat="${EDIT}">✎ Edit slots</button>
+  const chips = `<div class="catbar">
+      <label class="lbl" for="catselect">Category</label>
+      <select id="catselect" data-catselect>
+        <option value="" ${CAT && CAT !== EDIT ? '' : 'selected'}>All categories (${d.rows.length})</option>
+        ${names.map(n => `<option value="${esc(n)}" ${n === CAT ? 'selected' : ''}>${esc(n)} (${cats.filter(c => c === n).length})</option>`).join('')}
+      </select>
+      <button class="btn ${CAT === EDIT ? 'primary' : ''}" data-cat="${CAT === EDIT ? '' : EDIT}">${CAT === EDIT ? '← Back to photos' : '✎ Edit slots'}</button>
     </div>`;
   const shown = d.rows.map((r, i) => i).filter(i => !CAT || cats[i] === CAT);
   const slots = d.rows.map(r => {
@@ -389,7 +405,7 @@ function renderShot() {
       <div class="body">
         <div><label class="lbl">Location</label>${f(1)}</div>
         <div><label class="lbl">Faculty / CI</label>${f(2, 'ta')}${lockedFac ? '<div class="merged-note">Shared with the slot above (merged cell)</div>' : ''}</div>
-        ${ci >= 0 ? `<div><label class="lbl">Category</label>${f(ci)}</div>` : ''}
+        ${ci >= 0 ? `<div><label class="lbl">Category</label>${catSelect(r, ci, names)}</div>` : ''}
         <div class="${ci >= 0 ? '' : 'full'}"><label class="lbl">Notes</label>${f(ni)}</div>
       </div>
       <div class="side"><div style="flex:1"><label class="lbl">Status</label>${statusSelect('shot', r, si)}</div>
@@ -549,6 +565,13 @@ document.addEventListener('paste', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && LB) closeLb(); });
 
 document.addEventListener('change', e => {
+  if (e.target.dataset.catselect === undefined) return;
+  CAT = e.target.value; PICK = null;
+  try { localStorage.setItem('cat', CAT); } catch (_) {}
+  renderShot();
+});
+
+document.addEventListener('change', e => {
   if (e.target.dataset.done === undefined) return;
   const ph = e.target.closest('[data-ph]'), r = +ph.dataset.r, c = +ph.dataset.c, t = +ph.dataset.t;
   const done = e.target.checked;
@@ -639,6 +662,11 @@ document.addEventListener('change', async e => {
   if (!el.dataset.k || el.readOnly) return;
   const k = el.dataset.k, row = +el.dataset.r, c = +el.dataset.c;
   const rec = DATA[k].rows.find(x => x.row === row);
+  if (el.value === NEW_CAT) {
+    const name = (prompt('New category name') || '').trim();
+    if (!name) { el.value = rec ? String(rec.cells[c - 1] || '').trim() : ''; return; }
+    el.add(new Option(name, name, true, true), el.options.length - 1);
+  }
   if (rec) rec.cells[c - 1] = el.value;
   const wrap = el.closest('[data-row]');
   if (wrap && rec) wrap.dataset.text = rowText(rec);
