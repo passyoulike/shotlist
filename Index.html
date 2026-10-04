@@ -32,8 +32,8 @@
   textarea{resize:vertical;min-height:36px}
   input:focus,textarea:focus,select:focus{outline:2px solid var(--brand);outline-offset:-1px;border-color:transparent}
   [readonly]{background:#f8f9fa;color:var(--muted)}
-  button.btn{border:1px solid var(--line);background:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
-  button.btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .btn{border:1px solid var(--line);background:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+  .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
   button.del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:16px;padding:6px;border-radius:6px}
   button.del:hover{background:#fee2e2;color:var(--skip)}
 
@@ -116,6 +116,15 @@
   #lb .lb-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:#fff}
   #lb .lb-bar span{flex:1;min-width:160px;font-weight:600}
 
+  .meet{max-width:520px;margin:24px auto;text-align:center;padding:32px 20px;display:flex;flex-direction:column;align-items:center;gap:10px}
+  .meet h2{margin:0;font-size:20px}
+  .meet p{margin:0;color:var(--muted)}
+  .meet-icon{width:56px;height:56px;padding:12px;border-radius:16px;background:var(--brand-soft);fill:var(--brand)}
+  a.btn{display:inline-block;text-decoration:none}
+  .meet-join{font-size:16px;padding:12px 28px;margin-top:6px}
+  .meet-link{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;margin-top:8px}
+  .meet-link code{user-select:all;background:#f1f3f5;padding:7px 10px;border-radius:8px;font-size:13px;word-break:break-all}
+
   .empty{text-align:center;padding:40px 16px;color:var(--muted)}
   .hidden{display:none!important}
   #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1d2330;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw}
@@ -145,6 +154,7 @@
     <button data-tab="shot" class="active">Shot List<span class="count" id="c-shot"></span></button>
     <button data-tab="team">Team<span class="count" id="c-team"></span></button>
     <button data-tab="sl1">SL 1<span class="count" id="c-sl1"></span></button>
+    <button data-tab="meet">Meeting</button>
   </nav>
 </header>
 
@@ -152,6 +162,19 @@
   <section id="tab-shot" class="panel active"></section>
   <section id="tab-team" class="panel"></section>
   <section id="tab-sl1" class="panel"></section>
+  <section id="tab-meet" class="panel">
+    <!-- Google Meet refuses to load inside other pages, so this tab opens the call in a new tab. -->
+    <div class="card meet">
+      <svg class="meet-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="13" height="12" rx="2.5"/><path d="M16 10.5 21.2 7.4a.5.5 0 0 1 .8.4v8.4a.5.5 0 0 1-.8.4L16 13.5z"/></svg>
+      <h2>Team meeting</h2>
+      <p>Google Meet opens in a new tab.</p>
+      <a class="btn primary meet-join" href="https://meet.google.com/opu-mwsg-cnm" target="_blank" rel="noopener">Join Google Meet</a>
+      <div class="meet-link">
+        <code id="meet-url">https://meet.google.com/opu-mwsg-cnm</code>
+        <button class="btn" data-copymeet>Copy link</button>
+      </div>
+    </div>
+  </section>
 </main>
 
 <datalist id="dl-times"></datalist>
@@ -543,6 +566,12 @@ document.addEventListener('click', async e => {
     CAT = chip.dataset.cat; PICK = null;
     try { localStorage.setItem('cat', CAT); } catch (_) {}
     return renderShot();
+  }
+  if (e.target.closest('[data-copymeet]')) {
+    const url = $('#meet-url').textContent;
+    try { await navigator.clipboard.writeText(url); toast('Meeting link copied'); }
+    catch (_) { getSelection().selectAllChildren($('#meet-url')); toast('Press Ctrl+C to copy the selected link'); }
+    return;
   }
   if (e.target.closest('[data-showempty]')) {
     SHOW_EMPTY = !SHOW_EMPTY; PICK = null;
