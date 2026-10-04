@@ -477,7 +477,8 @@ function refreshProgress(key) {
 
 /* ---------- photo upload / paste / viewer ---------- */
 let PICK = null, LB = null;
-const fileIn = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*' });
+// The accept filter is built from two parts because Google's page compressor treats "/" + "*" as a comment start.
+const fileIn = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/' + '*' });
 fileIn.addEventListener('change', () => {
   const f = fileIn.files[0]; fileIn.value = '';
   if (f && PICK) upload(PICK.r, PICK.c, PICK.t, f);
