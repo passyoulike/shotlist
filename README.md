@@ -22,7 +22,8 @@ deployed there (see below).
 
 - **Shot List**: headings in row 4 (Time, Location, Faculty / CI, Status, Notes, CATEGORY, then one column per shot type). Row 1 photos live in the shot-type cells.
 - **PHOTOS**: photos 2–5 for each shot type, plus the **Video Done** checkbox for every photo. Created automatically.
-- **TEAM** and **SL 1**: the Team and SL 1 tabs.
+- **NOTES**: the Notes tab (created automatically). Anyone can read; editing needs the admin password, stored in Project Settings → Script Properties as `NOTES_PASSWORD` (never in this repo).
+- **SL 1**: the SL 1 tab. **TEAM** is no longer shown in the app.
 
 ## Deploying a change
 

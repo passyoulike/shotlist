@@ -119,6 +119,28 @@
   #lb .lb-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:#fff}
   #lb .lb-bar span{flex:1;min-width:160px;font-weight:600}
 
+  /* Notes */
+  .btn.danger{color:var(--skip);border-color:#f3c4c4}
+  .btn.small{padding:4px 10px;font-size:12px}
+  .unlock{display:flex;gap:6px}
+  .unlock input{width:170px}
+  .note-editor{margin-bottom:14px;display:flex;flex-direction:column;gap:6px}
+  .note-editor h3{margin:0 0 4px;font-size:16px}
+  .note-editor .lbl{margin-top:4px}
+  .note-row{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
+  .note-row > div{flex:1 1 220px}
+  .pin{display:flex;align-items:center;gap:6px;font-weight:600;padding-bottom:8px;cursor:pointer}
+  .pin input{width:auto}
+  .note-actions{display:flex;gap:8px;margin-top:8px}
+  .notes{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start}
+  .note{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+  .note.pinned{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .note-head{display:flex;justify-content:space-between;gap:8px;width:100%}
+  .note-head h3{margin:0;font-size:15px;word-break:break-word}
+  .note-body{white-space:normal;word-break:break-word;line-height:1.5}
+  .note-body a{color:var(--brand)}
+  .note-foot{font-size:11px;color:var(--muted)}
+
   .meet{max-width:520px;margin:24px auto;text-align:center;padding:32px 20px;display:flex;flex-direction:column;align-items:center;gap:10px}
   .meet h2{margin:0;font-size:20px}
   .meet p{margin:0;color:var(--muted)}
@@ -155,7 +177,7 @@
   </div>
   <nav class="tabs">
     <button data-tab="shot" class="active">Shot List<span class="count" id="c-shot"></span></button>
-    <button data-tab="team">Team<span class="count" id="c-team"></span></button>
+    <button data-tab="notes">Notes<span class="count" id="c-notes"></span></button>
     <button data-tab="sl1">SL 1<span class="count" id="c-sl1"></span></button>
     <button data-tab="meet">Meeting</button>
   </nav>
@@ -163,7 +185,7 @@
 
 <main>
   <section id="tab-shot" class="panel active"></section>
-  <section id="tab-team" class="panel"></section>
+  <section id="tab-notes" class="panel"></section>
   <section id="tab-sl1" class="panel"></section>
   <section id="tab-meet" class="panel">
     <!-- Google Meet refuses to load inside other pages, so this tab opens the call in a new tab. -->
@@ -251,9 +273,10 @@ function lines(v) { return Math.min(8, Math.max(1, String(v || '').split(/\n/).l
 function renderAll() {
   const s = DATA.shot;
   renderSub();
-  ['shot', 'team', 'sl1'].forEach(k => { $('#c-' + k).textContent = DATA[k].rows.length; });
+  ['shot', 'sl1'].forEach(k => { $('#c-' + k).textContent = DATA[k].rows.length; });
+  refreshNoteCount();
   renderLists();
-  renderShot(); renderTeam(); renderSl1();
+  renderShot(); renderNotes(); renderSl1();
 }
 
 // Header line under the app name: the shoot title from cell A1 and the shoot date.
@@ -454,13 +477,118 @@ function field(key, d, r, ci) {
   return `<input ${a} value="${esc(v)}" ${list ? `list="${list}"` : ''}>`;
 }
 
-function renderTeam() {
-  const s = DATA.sl1, ai = colStarts(s, 'assigned');
-  const shotsFor = name => !name.trim() || ai < 0 ? 0 :
-    s.rows.filter(r => String(r.cells[ai]).toLowerCase().includes(name.trim().toLowerCase())).length;
-  $('#tab-team').innerHTML = toolbar('team', 'Add member') +
-    renderTable('team', '<th>Shots</th>', r => `<td class="ro">${shotsFor(r.cells[0])}</td>`);
+/* ---------- Notes tab: everyone can read; an admin (password checked on the server) can write ---------- */
+let ADMIN = null;            // admin token from the server, kept only for this browser tab
+let EDITING = null;          // the note being edited ({} for a new one)
+let NOTE_Q = '', NOTE_TAG = '';
+try { ADMIN = sessionStorage.getItem('admin') || null; } catch (_) {}
+
+function linkify(text) {
+  return esc(text).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g, '<br>');
 }
+
+function renderNotes() {
+  const notes = DATA.notes || [], tags = uniq(notes.map(n => n.tag));
+  const editor = EDITING ? `<div class="card note-editor">
+      <h3>${EDITING.id ? 'Edit note' : 'New note'}</h3>
+      <label class="lbl">Title</label><input id="note-title" value="${esc(EDITING.title)}" placeholder="e.g. Call time reminder">
+      <label class="lbl">Note</label><textarea id="note-body" rows="8" placeholder="Write the note… links become clickable">${esc(EDITING.body)}</textarea>
+      <div class="note-row">
+        <div><label class="lbl">Tag</label><input id="note-tag" list="dl-notetags" value="${esc(EDITING.tag)}" placeholder="e.g. Reminder, Client, Gear"></div>
+        <label class="pin"><input type="checkbox" id="note-pinned" ${EDITING.pinned ? 'checked' : ''}> Pin to top</label>
+      </div>
+      <datalist id="dl-notetags">${tags.map(t => `<option value="${esc(t)}">`).join('')}</datalist>
+      <div class="note-actions">
+        ${EDITING.id ? '<button class="btn danger" data-note="delete">Delete</button>' : ''}
+        <span style="flex:1"></span>
+        <button class="btn" data-note="cancel">Cancel</button>
+        <button class="btn primary" data-note="save">Save note</button>
+      </div>
+    </div>` : '';
+  const lock = ADMIN
+    ? `<button class="btn primary" data-note="new">+ New note</button><button class="btn" data-note="lock" title="Lock admin editing">🔓 Admin · Lock</button>`
+    : `<form class="unlock" data-unlock><input type="password" id="admin-pw" placeholder="Admin password" autocomplete="current-password"><button class="btn">🔒 Unlock</button></form>`;
+  $('#tab-notes').innerHTML = `
+    <div class="toolbar">
+      <input type="search" placeholder="Search notes…" data-notesearch value="${esc(NOTE_Q)}">
+      ${tags.length ? `<select data-notetag style="width:auto"><option value="">All tags</option>${tags.map(t => `<option ${t === NOTE_TAG ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>` : ''}
+      ${lock}
+    </div>
+    ${editor}
+    <div id="notes-list"></div>`;
+  renderNoteList();
+}
+
+function renderNoteList() {
+  const q = NOTE_Q.trim().toLowerCase();
+  const list = (DATA.notes || [])
+    .filter(n => (!NOTE_TAG || n.tag === NOTE_TAG) && (!q || [n.title, n.body, n.tag].join(' ').toLowerCase().includes(q)))
+    .sort((a, b) => (b.pinned - a.pinned) || String(b.updated).localeCompare(String(a.updated)));
+  $('#notes-list').innerHTML = list.length ? `<div class="notes">${list.map(n => `
+      <article class="note ${n.pinned ? 'pinned' : ''}">
+        <div class="note-head">
+          <h3>${n.pinned ? '📌 ' : ''}${esc(n.title || 'Untitled')}</h3>
+          ${ADMIN ? `<button class="btn small" data-note="edit" data-id="${esc(n.id)}">Edit</button>` : ''}
+        </div>
+        ${n.tag ? `<span class="chip slotcat">${esc(n.tag)}</span>` : ''}
+        <div class="note-body">${linkify(n.body)}</div>
+        <div class="note-foot">Updated ${esc(n.updated)}</div>
+      </article>`).join('')}</div>`
+    : `<div class="empty card">${(DATA.notes || []).length ? 'No notes match.' : 'No notes yet.' + (ADMIN ? ' Click “+ New note”.' : ' Unlock as admin to add one.')}</div>`;
+}
+
+document.addEventListener('submit', async e => {
+  if (!e.target.matches('[data-unlock]')) return;
+  e.preventDefault();
+  const pw = $('#admin-pw').value;
+  if (!pw) return;
+  try {
+    ADMIN = await save('adminLogin', [pw]);
+    try { sessionStorage.setItem('admin', ADMIN); } catch (_) {}
+    renderNotes(); toast('Admin unlocked');
+  } catch (_) { $('#admin-pw').value = ''; }
+});
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-note]');
+  if (!b) return;
+  const act = b.dataset.note;
+  if (act === 'new') { EDITING = { title: '', body: '', tag: NOTE_TAG, pinned: false }; return renderNotes(); }
+  if (act === 'edit') { EDITING = { ...(DATA.notes.find(n => n.id === b.dataset.id) || {}) }; renderNotes(); return scrollTo({ top: 0, behavior: 'smooth' }); }
+  if (act === 'cancel') { EDITING = null; return renderNotes(); }
+  if (act === 'lock') {
+    ADMIN = null; EDITING = null;
+    try { sessionStorage.removeItem('admin'); } catch (_) {}
+    toast('Admin locked'); return renderNotes();
+  }
+  const adminCall = async (fn, args) => {
+    try { return await save(fn, args); }
+    catch (err) {
+      if (/expired/i.test(err && err.message)) { ADMIN = null; try { sessionStorage.removeItem('admin'); } catch (_) {} renderNotes(); }
+      return null;
+    }
+  };
+  if (act === 'save') {
+    const note = { id: EDITING.id, title: $('#note-title').value, body: $('#note-body').value, tag: $('#note-tag').value, pinned: $('#note-pinned').checked };
+    const res = await adminCall('saveNote', [ADMIN, note]);
+    if (res) { DATA.notes = res; EDITING = null; renderNotes(); refreshNoteCount(); toast('Note saved'); }
+  }
+  if (act === 'delete' && confirm('Delete this note?')) {
+    const res = await adminCall('deleteNote', [ADMIN, EDITING.id]);
+    if (res) { DATA.notes = res; EDITING = null; renderNotes(); refreshNoteCount(); toast('Note deleted'); }
+  }
+});
+
+document.addEventListener('input', e => {
+  if (e.target.dataset.notesearch === undefined) return;
+  NOTE_Q = e.target.value; renderNoteList();
+});
+document.addEventListener('change', e => {
+  if (e.target.dataset.notetag === undefined) return;
+  NOTE_TAG = e.target.value; renderNoteList();
+});
+
+function refreshNoteCount() { $('#c-notes').textContent = (DATA.notes || []).length; }
 
 function renderSl1() {
   const d = DATA.sl1, si = col(d, 'status');
@@ -632,7 +760,6 @@ document.addEventListener('click', async e => {
   if (t.dataset.tab) {
     document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b === t));
     document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + t.dataset.tab));
-    if (t.dataset.tab === 'team' && DATA) renderTeam(); // refresh the Shots count from SL 1
     try { localStorage.setItem('tab', t.dataset.tab); } catch (_) {}
   } else if (t.dataset.refresh !== undefined) {
     load();
@@ -673,7 +800,7 @@ document.addEventListener('change', async e => {
   if (wrap && rec) wrap.dataset.text = rowText(rec);
   if (el.classList.contains('status')) {
     el.className = 'status v-' + slug(el.value);
-    if (wrap) wrap.className = wrap.className.replace(/st-[\w-]*/, 'st-' + slug(el.value));
+    if (wrap) wrap.className = wrap.className.replace(/st-[\w-]+|st-(?=\s|$)/, 'st-' + slug(el.value));
     refreshProgress(k);
   }
   if (k === 'shot' && c <= 2 || k === 'team' && c === 1) renderLists();
@@ -691,7 +818,7 @@ document.addEventListener('input', e => {
 // Keep everyone in sync on shoot day: quiet refresh every 60s when nobody is typing.
 setInterval(() => {
   const a = document.activeElement;
-  if (!document.hidden && !pending && !PICK && !LB && !(a && a.matches('input,textarea,select'))) load(true);
+  if (!document.hidden && !pending && !PICK && !LB && !EDITING && !(a && a.matches('input,textarea,select'))) load(true);
 }, 60000);
 
 try {
@@ -713,11 +840,23 @@ const MOCK = (() => {
       ].map((c, i) => ({ row: 5 + i, cells: [...c, '', '', i === 0 ? 'NURSING FUNDA' : '', '', '', '', ''],
         locked: [false, false, i === 5 || i === 6, false, false, false, false, false, false, false], img: Array(10).fill('') })) },
     team: { key: 'team', sheet: 'TEAM', headers: ['Name', 'Role', 'Contact No.', 'Email', 'Assignment', 'Notes'], rows: [] },
-    sl1: { key: 'sl1', sheet: 'SL 1', headers: ['Shot #', 'Time', 'Location', 'Shot Description', 'Shot Type', 'Camera / Angle', 'Subject / Talent', 'Assigned To', 'Status', 'Notes'], rows: [] }
+    sl1: { key: 'sl1', sheet: 'SL 1', headers: ['Shot #', 'Time', 'Location', 'Shot Description', 'Shot Type', 'Camera / Angle', 'Subject / Talent', 'Assigned To', 'Status', 'Notes'], rows: [] },
+    notes: []
   };
+  let noteId = 0;
+  const stamp = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
   const ok = v => Promise.resolve(v);
   return {
     getData: () => ok(JSON.parse(JSON.stringify(db))),
+    // Local preview only: the real password is checked on the server.
+    adminLogin: pw => pw === 'preview' ? ok('mock-token') : Promise.reject(new Error('Wrong password.')),
+    saveNote: (t, n) => {
+      const ex = db.notes.find(x => x.id === n.id);
+      if (ex) Object.assign(ex, n, { updated: stamp() });
+      else db.notes.push({ ...n, id: 'n' + (++noteId), updated: stamp(), created: stamp() });
+      return ok(JSON.parse(JSON.stringify(db.notes)));
+    },
+    deleteNote: (t, id) => { db.notes = db.notes.filter(x => x.id !== id); return ok(JSON.parse(JSON.stringify(db.notes))); },
     updateCell: (k, r, c, v) => { const x = db[k].rows.find(y => y.row === r); if (x) x.cells[c - 1] = v; return ok(true); },
     setDate: v => { db.shot.date = v; return ok(true); },
     uploadPhoto: (r, c, t, name, b64, mime) => ok('data:' + mime + ';base64,' + b64),

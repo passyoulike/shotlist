@@ -27,7 +27,87 @@ function doGet() {
 /* ---------- API called from Index.html ---------- */
 
 function getData() {
-  return { shot: read_('shot'), team: read_('team'), sl1: read_('sl1') };
+  return { shot: read_('shot'), team: read_('team'), sl1: read_('sl1'), notes: readNotes_() };
+}
+
+/* ---------- Notes tab: everyone reads, admins (password) write ---------- */
+// The password lives in Project Settings > Script Properties as NOTES_PASSWORD (never in this code).
+
+const NOTE_HEADERS = ['ID', 'Title', 'Note', 'Tag', 'Pinned', 'Updated', 'Created'];
+const ADMIN_HOURS = 6;
+
+function adminLogin(password) {
+  const cache = CacheService.getScriptCache();
+  const fails = Number(cache.get('adm_fails') || 0);
+  if (fails >= 10) throw new Error('Too many wrong tries. Wait 10 minutes and try again.');
+  const real = PropertiesService.getScriptProperties().getProperty('NOTES_PASSWORD');
+  if (!real) throw new Error('The admin password has not been set up yet.');
+  if (String(password || '').trim() !== real) {
+    cache.put('adm_fails', String(fails + 1), 600);
+    throw new Error('Wrong password.');
+  }
+  const token = Utilities.getUuid();
+  cache.put('adm_' + token, '1', ADMIN_HOURS * 3600);
+  return token;
+}
+
+function saveNote(token, note) {
+  checkAdmin_(token);
+  return withLock_(() => {
+    const sh = notesSheet_();
+    const now = "'" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
+    const title = String(note.title || '').slice(0, 200), body = String(note.body || '').slice(0, 20000);
+    const tag = String(note.tag || '').trim().slice(0, 60), pinned = note.pinned ? 'TRUE' : '';
+    if (!title.trim() && !body.trim()) throw new Error('Write a title or some text first.');
+    const at = note.id ? findNote_(sh, note.id) : 0;
+    if (at) {
+      sh.getRange(at, 2, 1, 5).setValues([[title, body, tag, pinned, now]]);
+    } else {
+      sh.appendRow([Utilities.getUuid().slice(0, 8), title, body, tag, pinned, now, now]);
+    }
+    return readNotes_();
+  });
+}
+
+function deleteNote(token, id) {
+  checkAdmin_(token);
+  return withLock_(() => {
+    const sh = notesSheet_(), at = findNote_(sh, id);
+    if (at) sh.deleteRow(at);
+    return readNotes_();
+  });
+}
+
+function checkAdmin_(token) {
+  if (!token || !CacheService.getScriptCache().get('adm_' + token)) {
+    throw new Error('Admin access has expired. Unlock again.');
+  }
+}
+
+function notesSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName('NOTES');
+  if (!sh) {
+    sh = ss.insertSheet('NOTES');
+    sh.getRange(1, 1, 1, NOTE_HEADERS.length).setValues([NOTE_HEADERS]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function findNote_(sh, id) {
+  if (sh.getLastRow() < 2) return 0;
+  const ids = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getDisplayValues();
+  const i = ids.findIndex(r => r[0] === String(id));
+  return i < 0 ? 0 : i + 2;
+}
+
+function readNotes_() {
+  const sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('NOTES');
+  if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, NOTE_HEADERS.length).getDisplayValues()
+    .filter(r => r[0])
+    .map(r => ({ id: r[0], title: r[1], body: r[2], tag: r[3], pinned: r[4].toUpperCase() === 'TRUE', updated: r[5], created: r[6] }));
 }
 
 function updateCell(key, row, col, value) {
