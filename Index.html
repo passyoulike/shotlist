@@ -161,7 +161,7 @@
   .lyr-caret{color:var(--muted)}
   .lyr-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:99px;background:var(--brand-soft);color:var(--brand)}
   .lyr-badge.script{background:#fff4e6;color:var(--accent)}
-  .lyr-text{padding:12px 14px;max-height:420px;overflow:auto;line-height:1.6;font-size:15px}
+  .lyr-text{padding:12px 14px;line-height:1.6;font-size:15px;word-break:break-word}
 
   /* Notes */
   .btn.danger{color:var(--skip);border-color:#f3c4c4}
@@ -739,11 +739,10 @@ function renderAudio() {
 
 /* ---------- Script & Lyrics under the main song: everyone reads, admins add / edit / delete ---------- */
 let LYR_EDIT = null; // the item being edited ({} for a new one)
-let LYR_OPEN = null; // id of the item expanded for reading
+const LYR_CLOSED = new Set(); // everything is shown in full; ids here were collapsed by the viewer
 
 function renderLyrics() {
   const items = DATA.lyrics || [];
-  if (!LYR_OPEN && items.length) LYR_OPEN = items[0].id;
   const editor = LYR_EDIT ? `<div class="lyr-editor">
       <div class="note-row">
         <div><label class="lbl">Title</label><input id="lyr-title" value="${esc(LYR_EDIT.title)}" placeholder="e.g. Main song lyrics, VO script take 2"></div>
@@ -760,7 +759,7 @@ function renderLyrics() {
       </div>
     </div>` : '';
   const list = items.map(it => {
-    const open = it.id === LYR_OPEN;
+    const open = !LYR_CLOSED.has(it.id);
     return `<article class="lyr ${open ? 'open' : ''}">
       <div class="lyr-head" data-lyr="toggle" data-id="${esc(it.id)}">
         <span class="lyr-badge ${it.type === 'Script' ? 'script' : ''}">${esc(it.type)}</span>
@@ -789,7 +788,7 @@ document.addEventListener('click', async e => {
   const act = b.dataset.lyr;
   if (act === 'toggle') {
     if (e.target.closest('button')) return; // the Edit button inside the header handles itself
-    LYR_OPEN = LYR_OPEN === b.dataset.id ? '' : b.dataset.id;
+    if (LYR_CLOSED.has(b.dataset.id)) LYR_CLOSED.delete(b.dataset.id); else LYR_CLOSED.add(b.dataset.id);
     return renderLyrics();
   }
   if (act === 'new') { LYR_EDIT = { title: '', text: '', type: 'Lyrics' }; return renderLyrics(); }
@@ -807,13 +806,13 @@ document.addEventListener('click', async e => {
     const res = await call('saveLyric', [ADMIN, item]);
     if (res) {
       DATA.lyrics = res; LYR_EDIT = null;
-      LYR_OPEN = item.id || (res[res.length - 1] || {}).id;
+      if (item.id) LYR_CLOSED.delete(item.id); // show the edited one in full again
       renderLyrics(); toast('Saved');
     }
   }
   if (act === 'delete' && confirm('Delete this script / lyrics?')) {
     const res = await call('deleteLyric', [ADMIN, LYR_EDIT.id]);
-    if (res) { DATA.lyrics = res; LYR_EDIT = null; LYR_OPEN = null; renderLyrics(); toast('Deleted'); }
+    if (res) { DATA.lyrics = res; LYR_EDIT = null; renderLyrics(); toast('Deleted'); }
   }
 });
 
