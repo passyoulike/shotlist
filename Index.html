@@ -95,15 +95,16 @@
   .nophotos{color:var(--muted);font-size:12px;padding:4px 12px 2px}
   .slotboard{margin-top:18px}
   .slotboard:first-of-type{margin-top:0}
-  .slothead{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:10px 12px;background:var(--brand-soft);border-radius:10px;margin-bottom:8px}
+  .slothead{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px 16px;padding:10px 12px;background:var(--brand-soft);border-radius:10px;margin-bottom:8px}
+  .slotleft{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
   .slottime{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
   .slottime b{font-size:15px;color:var(--brand)}.slottime span{font-size:13px;color:var(--muted)}
   .chip.slotcat{padding:3px 10px;font-size:11px;background:var(--brand);border-color:var(--brand);color:#fff}
-  .facline{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:13px}
+  .facline{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:4px 8px;font-size:13px;text-align:right;max-width:55%}
   .faclabel{font-weight:700;color:var(--ink)}
   .facval{color:var(--ink);word-break:break-word}
   .facval em{color:var(--muted)}
-  .facedit{display:flex;flex-direction:column;gap:6px;width:100%;max-width:520px}
+  .facedit{margin-left:auto;display:flex;flex-direction:column;gap:6px;width:100%;max-width:420px}
   .facedit .lbl{margin:0}
   .facbtns{display:flex;gap:6px;justify-content:flex-end}
   .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:start}
@@ -186,6 +187,7 @@
   #toast.err{background:var(--skip)}
 
   @media (max-width:760px){
+    .facline{max-width:100%}
     .summary{grid-template-columns:1fr}
     .slot{grid-template-columns:1fr}
     .slot .body{grid-template-columns:1fr}
@@ -463,8 +465,10 @@ function renderBoard(d, rows, pcols, catOf) {
     const cat = catOf[i];
     return `<section class="slotboard" data-text="${esc(rowText(r) + ' ' + cat.toLowerCase())}">
       <div class="slothead">
-        <div class="slottime"><b>${esc(r.cells[0])}</b><span>${esc(r.cells[1])}</span></div>
-        ${cat ? `<button class="chip slotcat" data-cat="${esc(cat)}" title="Show only ${esc(cat)}">${esc(cat)}</button>` : ''}
+        <div class="slotleft">
+          <div class="slottime"><b>${esc(r.cells[0])}</b><span>${esc(r.cells[1])}</span></div>
+          ${cat ? `<button class="chip slotcat" data-cat="${esc(cat)}" title="Show only ${esc(cat)}">${esc(cat)}</button>` : ''}
+        </div>
         ${facultyHtml(d, r)}
       </div>
       ${tiles.length ? `<div class="grid">
