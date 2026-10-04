@@ -99,6 +99,13 @@
   .slottime{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
   .slottime b{font-size:15px;color:var(--brand)}.slottime span{font-size:13px;color:var(--muted)}
   .chip.slotcat{padding:3px 10px;font-size:11px;background:var(--brand);border-color:var(--brand);color:#fff}
+  .facline{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:13px}
+  .faclabel{font-weight:700;color:var(--ink)}
+  .facval{color:var(--ink);word-break:break-word}
+  .facval em{color:var(--muted)}
+  .facedit{display:flex;flex-direction:column;gap:6px;width:100%;max-width:520px}
+  .facedit .lbl{margin:0}
+  .facbtns{display:flex;gap:6px;justify-content:flex-end}
   .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:start}
   .tile{display:flex;flex-direction:column;gap:4px;min-width:0}
   .tlabel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -357,6 +364,61 @@ function toImg(text) {
 const TAKES = 5; // photo rows under each time slot (row 1 = the Shot List cell, rows 2-5 = PHOTOS sheet)
 let SHOW_EMPTY = false; // empty photo boxes are hidden until "+ Add photos" is pressed
 
+/* ---------- Faculty / CI under each time slot (editable in place, saved to the Shot List sheet) ---------- */
+let FAC_EDIT = null; // Shot List row whose Faculty / CI is being edited
+function facCol(d) {
+  const i = d.headers.findIndex(h => String(h).trim().toLowerCase().startsWith('faculty'));
+  return i >= 0 ? i : 2;
+}
+
+function facultyHtml(d, r) {
+  const fi = facCol(d), label = esc(d.headers[fi] || 'Faculty / CI'), v = String(r.cells[fi] || '').trim();
+  if (FAC_EDIT === r.row) {
+    return `<div class="facedit">
+      <label class="lbl" for="fac-input">${label}</label>
+      <textarea id="fac-input" rows="${Math.max(2, lines(v))}" placeholder="Name(s), one per line">${esc(v)}</textarea>
+      ${r.locked[fi] ? '<small class="hint">Shared with the slot(s) above, so they update too.</small>' : ''}
+      <div class="facbtns"><button class="btn small" data-fac="cancel">Cancel</button>
+        <button class="btn small primary" data-fac="save" data-r="${r.row}">Save</button></div>
+    </div>`;
+  }
+  return `<div class="facline">
+    <span class="faclabel">${label}:</span>
+    <span class="facval">${v ? esc(v.split(/\n+/).map(s => s.trim()).filter(Boolean).join(', ')) : '<em>Not set</em>'}</span>
+    <button class="btn small" data-fac="edit" data-r="${r.row}" title="Edit ${label}">✎ Edit</button>
+  </div>`;
+}
+
+// A merged Faculty / CI cell covers several slots: update the whole group locally.
+function setFaculty(row, fi, value) {
+  const rows = DATA.shot.rows;
+  let i = rows.findIndex(x => x.row === row);
+  if (i < 0) return;
+  while (i > 0 && rows[i].locked[fi]) i--;
+  do { rows[i].cells[fi] = value; i++; } while (i < rows.length && rows[i].locked[fi]);
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-fac]');
+  if (!b) return;
+  const act = b.dataset.fac;
+  if (act === 'edit') {
+    FAC_EDIT = +b.dataset.r; renderShot();
+    const ta = $('#fac-input'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    return;
+  }
+  if (act === 'cancel') { FAC_EDIT = null; return renderShot(); }
+  if (act === 'save') {
+    const row = +b.dataset.r, fi = facCol(DATA.shot), value = $('#fac-input').value.trim();
+    b.disabled = true; b.textContent = 'Saving…';
+    try {
+      await save('updateCell', ['shot', row, fi + 1, value]);
+      setFaculty(row, fi, value);
+      FAC_EDIT = null; renderShot(); toast('Faculty / CI updated');
+    } catch (_) { b.disabled = false; b.textContent = 'Save'; }
+  }
+});
+
 function photo(r, ci, take) {
   if (!take || take === 1) return (r.img && r.img[ci]) || toImg(r.cells[ci]);
   const x = (DATA.shot.extra || []).find(p => p.slot === r.row && p.col === ci + 1 && p.take === take);
@@ -403,6 +465,7 @@ function renderBoard(d, rows, pcols, catOf) {
       <div class="slothead">
         <div class="slottime"><b>${esc(r.cells[0])}</b><span>${esc(r.cells[1])}</span></div>
         ${cat ? `<button class="chip slotcat" data-cat="${esc(cat)}" title="Show only ${esc(cat)}">${esc(cat)}</button>` : ''}
+        ${facultyHtml(d, r)}
       </div>
       ${tiles.length ? `<div class="grid">
         ${tiles.map(([ci, t]) => `<div class="tile"><div class="tlabel">${label(ci, t)}</div>${phCell(d, r, ci, t)}</div>`).join('')}
@@ -955,7 +1018,7 @@ document.addEventListener('input', e => {
 // Keep everyone in sync on shoot day: quiet refresh every 60s when nobody is typing.
 setInterval(() => {
   const a = document.activeElement;
-  if (!document.hidden && !pending && !PICK && !LB && !EDITING && !(a && a.matches('input,textarea,select'))) load(true);
+  if (!document.hidden && !pending && !PICK && !LB && !EDITING && FAC_EDIT === null && !(a && a.matches('input,textarea,select'))) load(true);
 }, 60000);
 
 try {
