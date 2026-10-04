@@ -105,7 +105,8 @@ function readMedia_() {
 }
 
 /* ---------- Notes tab: everyone reads, admins (password) write ---------- */
-// The password lives in Project Settings > Script Properties as NOTES_PASSWORD (never in this code).
+// Admin passwords live in the spreadsheet's "Admin" sheet (any non-empty cell from row 2 down; row 1 is
+// for labels), never in this code. The NOTES_PASSWORD script property still works as a fallback.
 
 const NOTE_HEADERS = ['ID', 'Title', 'Note', 'Tag', 'Pinned', 'Updated', 'Created'];
 const ADMIN_HOURS = 6;
@@ -114,9 +115,9 @@ function adminLogin(password) {
   const cache = CacheService.getScriptCache();
   const fails = Number(cache.get('adm_fails') || 0);
   if (fails >= 10) throw new Error('Too many wrong tries. Wait 10 minutes and try again.');
-  const real = PropertiesService.getScriptProperties().getProperty('NOTES_PASSWORD');
-  if (!real) throw new Error('The admin password has not been set up yet.');
-  if (String(password || '').trim() !== real) {
+  const valid = adminPasswords_();
+  if (!valid.length) throw new Error('No admin password yet. Add one to the Admin sheet (row 2 or below).');
+  if (valid.indexOf(String(password || '').trim()) < 0) {
     cache.put('adm_fails', String(fails + 1), 600);
     throw new Error('Wrong password.');
   }
@@ -150,6 +151,19 @@ function deleteNote(token, id) {
     if (at) sh.deleteRow(at);
     return readNotes_();
   });
+}
+
+function adminPasswords_() {
+  const list = [];
+  const sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheets()
+    .find(s => s.getName().trim().toLowerCase() === 'admin');
+  if (sh && sh.getLastRow() >= 2 && sh.getLastColumn() >= 1) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getDisplayValues()
+      .forEach(row => row.forEach(v => { v = String(v).trim(); if (v) list.push(v); }));
+  }
+  const prop = PropertiesService.getScriptProperties().getProperty('NOTES_PASSWORD');
+  if (prop) list.push(String(prop).trim());
+  return list;
 }
 
 function checkAdmin_(token) {
