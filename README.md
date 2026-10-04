@@ -3,6 +3,12 @@
 Google Apps Script web app for the CAHS promotional shoot. It reads and writes the
 `CAHS_Batch1 _Shot_List` Google Sheet.
 
+**Open the app:** https://passyoulike.github.io/shotlist/
+
+The GitHub Pages site (`docs/index.html`) shows the live Apps Script app full-screen.
+The app itself runs on Google Apps Script, so changes to `Code.gs` / `Index.html` still have to be
+deployed there (see below).
+
 ## Files
 
 | File | In the Apps Script project | What it does |
@@ -10,6 +16,7 @@ Google Apps Script web app for the CAHS promotional shoot. It reads and writes t
 | `Code.gs` | `Code.gs` | Server side: reads/writes the sheet, saves uploaded photos to Drive |
 | `Index.html` | `Index.html.html` (loaded as `Index.html`) | The web page |
 | `guide/parts.html` | – | Labelled illustration of the app's parts |
+| `docs/index.html` | – | GitHub Pages page that opens the live app |
 
 ## Sheets used
 
