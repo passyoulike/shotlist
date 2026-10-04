@@ -242,6 +242,9 @@
 </div>
 
 <script>
+// Google's page compressor treats a double slash or slash-star inside strings as a comment and cuts
+// the code, so links are built from this constant and no string may contain those sequences.
+const HTTPS = 'https:' + '/' + '/';
 const STATUS = { shot: ['Pending', 'Shooting', 'Done', 'Skipped'], sl1: ['Pending', 'In Progress', 'Done', 'Reshoot'] };
 const SHOT_TYPES = ['Wide', 'Medium', 'Close-up', 'Extreme close-up', 'B-roll', 'Interview', 'Detail', 'Group', 'Drone'];
 let DATA = null, pending = 0;
@@ -348,8 +351,8 @@ function photoCols(d) {
 function toImg(text) {
   const t = String(text || '').trim();
   const m = /drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]{20,})/.exec(t);
-  if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1600';
-  return /^https?:\/\//i.test(t) ? t : '';
+  if (m) return HTTPS + 'drive.google.com/thumbnail?id=' + m[1] + '&sz=w1600';
+  return /^https?:[\/][\/]/i.test(t) ? t : '';
 }
 const TAKES = 5; // photo rows under each time slot (row 1 = the Shot List cell, rows 2-5 = PHOTOS sheet)
 let SHOW_EMPTY = false; // empty photo boxes are hidden until "+ Add photos" is pressed
@@ -617,8 +620,8 @@ function refreshNoteCount() { $('#c-notes').textContent = (DATA.notes || []).len
 const MAIN_SONG_ID = '1CkKGSMxOjp23Lfbn9hchwF7S1qrRgbRZ';
 const MAX_MEDIA_MB = 35;
 const MEDIA_ACCEPT = '.mp3,.m4a,.wav,.aac,.ogg,.mp4,.mov,.m4v,.webm';
-const drivePreview = id => 'https://drive.google.com/file/d/' + id + '/preview';
-const driveView = id => 'https://drive.google.com/file/d/' + id + '/view';
+const drivePreview = id => HTTPS + 'drive.google.com/file/d/' + id + '/preview';
+const driveView = id => HTTPS + 'drive.google.com/file/d/' + id + '/view';
 let PLAYING = null;
 let UPLOADER = '';
 try { UPLOADER = localStorage.getItem('uploader') || ''; } catch (_) {}
