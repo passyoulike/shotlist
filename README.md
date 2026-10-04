@@ -1,6 +1,6 @@
-# CAHS Shot List
+# Radi Production Shot List Web App
 
-Google Apps Script web app for the CAHS promotional shoot. It reads and writes the
+Google Apps Script web app for the CAHS promotional shoot (Radi Production). It reads and writes the
 `CAHS_Batch1 _Shot_List` Google Sheet.
 
 **Open the app:** https://passyoulike.github.io/shotlist/

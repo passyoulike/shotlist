@@ -4,7 +4,7 @@
 <base target="_top">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CAHS Shot List</title>
+<title>Radi Production Shot List Web App</title>
 <style>
   :root{
     --bg:#f4f5f7; --card:#fff; --ink:#1d2330; --muted:#6b7280; --line:#e3e6eb;
@@ -138,7 +138,7 @@
 <body>
 <header class="top">
   <div class="top-row">
-    <div><h1 id="title">Shot List</h1><div class="sub" id="sub">Loading…</div></div>
+    <div><h1 id="title">Radi Production Shot List Web App</h1><div class="sub" id="sub">Loading…</div></div>
     <div id="saveState">Loading…</div>
   </div>
   <nav class="tabs">
@@ -224,11 +224,16 @@ function lines(v) { return Math.min(8, Math.max(1, String(v || '').split(/\n/).l
 /* ---------- rendering ---------- */
 function renderAll() {
   const s = DATA.shot;
-  $('#title').textContent = s.title || 'Shot List';
-  $('#sub').textContent = s.date ? 'Shoot date: ' + s.date : 'Shoot date not set';
+  renderSub();
   ['shot', 'team', 'sl1'].forEach(k => { $('#c-' + k).textContent = DATA[k].rows.length; });
   renderLists();
   renderShot(); renderTeam(); renderSl1();
+}
+
+// Header line under the app name: the shoot title from cell A1 and the shoot date.
+function renderSub() {
+  const s = DATA.shot;
+  $('#sub').textContent = [s.title, s.date ? 'Shoot date: ' + s.date : 'Shoot date not set'].filter(Boolean).join(' · ');
 }
 
 function renderLists() {
@@ -599,7 +604,7 @@ document.addEventListener('change', async e => {
   const el = e.target;
   if (el.dataset.date !== undefined) {
     DATA.shot.date = el.value;
-    $('#sub').textContent = el.value ? 'Shoot date: ' + el.value : 'Shoot date not set';
+    renderSub();
     return save('setDate', [el.value]).catch(() => {});
   }
   if (!el.dataset.k || el.readOnly) return;

@@ -1,5 +1,5 @@
 /**
- * CAHS Shot List – Web App
+ * Radi Production Shot List Web App (CAHS promotional shoot)
  * Tabs:  Shot List  ->  sheet "Shot List"  (header row 4: Time | Location | Faculty / CI)
  *        Team       ->  sheet "TEAM"
  *        SL 1       ->  sheet "SL 1"
@@ -19,7 +19,7 @@ const TABS = {
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index.html') // project file is named "Index.html"
-    .setTitle('CAHS Shot List')
+    .setTitle('Radi Production Shot List Web App')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
