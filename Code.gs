@@ -27,7 +27,81 @@ function doGet() {
 /* ---------- API called from Index.html ---------- */
 
 function getData() {
-  return { shot: read_('shot'), team: read_('team'), sl1: read_('sl1'), notes: readNotes_() };
+  return { shot: read_('shot'), team: read_('team'), sl1: read_('sl1'), notes: readNotes_(), media: readMedia_() };
+}
+
+/* ---------- Audio tab: anyone can upload audio/video; only admins delete ---------- */
+
+const MEDIA_HEADERS = ['ID', 'Title', 'File Name', 'Type', 'Size (MB)', 'Uploaded By', 'Uploaded', 'Drive ID'];
+const MAX_MEDIA_MB = 35;
+
+function uploadMedia(info, base64) {
+  const mime = String(info && info.mime || '');
+  if (!/^(audio|video)\//.test(mime)) throw new Error('Only audio (e.g. MP3) and video files can be uploaded.');
+  const bytes = Utilities.base64Decode(base64);
+  if (bytes.length > MAX_MEDIA_MB * 1024 * 1024) throw new Error('File is larger than ' + MAX_MEDIA_MB + ' MB.');
+  const name = String(info.name || 'upload').slice(0, 200);
+  const file = mediaFolder_().createFile(Utilities.newBlob(bytes, mime, name));
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return withLock_(() => {
+    const now = "'" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
+    mediaSheet_().appendRow([
+      Utilities.getUuid().slice(0, 8),
+      String(info.title || name).slice(0, 200),
+      name,
+      mime.indexOf('video/') === 0 ? 'Video' : 'Audio',
+      Math.round(bytes.length / 1048576 * 10) / 10,
+      String(info.by || '').slice(0, 80),
+      now,
+      file.getId()
+    ]);
+    return readMedia_();
+  });
+}
+
+function deleteMedia(token, id) {
+  checkAdmin_(token);
+  return withLock_(() => {
+    const sh = mediaSheet_();
+    if (sh.getLastRow() < 2) return [];
+    const rows = sh.getRange(2, 1, sh.getLastRow() - 1, MEDIA_HEADERS.length).getDisplayValues();
+    const i = rows.findIndex(r => r[0] === String(id));
+    if (i >= 0) {
+      try { DriveApp.getFileById(rows[i][7]).setTrashed(true); } catch (e) { /* already gone */ }
+      sh.deleteRow(i + 2);
+    }
+    return readMedia_();
+  });
+}
+
+function mediaSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName('MEDIA');
+  if (!sh) {
+    sh = ss.insertSheet('MEDIA');
+    sh.getRange(1, 1, 1, MEDIA_HEADERS.length).setValues([MEDIA_HEADERS]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function mediaFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('MEDIA_FOLDER_ID');
+  if (id) {
+    try { return DriveApp.getFolderById(id); } catch (e) { /* folder was deleted; make a new one */ }
+  }
+  const folder = DriveApp.createFolder('Radi Production Shot List Media');
+  props.setProperty('MEDIA_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+function readMedia_() {
+  const sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('MEDIA');
+  if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, MEDIA_HEADERS.length).getDisplayValues()
+    .filter(r => r[0] && r[7])
+    .map(r => ({ id: r[0], title: r[1], name: r[2], kind: r[3], size: r[4], by: r[5], uploaded: r[6], driveId: r[7] }));
 }
 
 /* ---------- Notes tab: everyone reads, admins (password) write ---------- */

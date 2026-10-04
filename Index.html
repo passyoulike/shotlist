@@ -119,6 +119,28 @@
   #lb .lb-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:#fff}
   #lb .lb-bar span{flex:1;min-width:160px;font-weight:600}
 
+  /* Audio */
+  .song{margin-bottom:14px;display:flex;flex-direction:column;gap:10px}
+  .song-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .song-head h2{margin:0;font-size:17px;word-break:break-word}
+  .song-frame{width:100%;height:150px;border:0;border-radius:10px;background:#f1f3f5}
+  .song-frame.video{height:auto;aspect-ratio:16/9}
+  .upload-card{margin-bottom:14px;display:flex;flex-direction:column;gap:8px}
+  .upload-card h3,.list-title{margin:0;font-size:15px}
+  .list-title{margin:4px 0 10px}
+  .upload-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+  .upload-row > div{flex:1 1 220px}
+  .upload-row input[type=file]{flex:1 1 260px;width:auto}
+  .hint{color:var(--muted)}
+  .media{display:grid;gap:8px}
+  .media-item{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px}
+  .media-item.playing{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand) inset}
+  .media-icon{font-size:22px}
+  .media-info{flex:1;min-width:0;display:flex;flex-direction:column}
+  .media-info b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .media-info span{font-size:12px;color:var(--muted)}
+  .media-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+
   /* Notes */
   .btn.danger{color:var(--skip);border-color:#f3c4c4}
   .btn.small{padding:4px 10px;font-size:12px}
@@ -178,7 +200,7 @@
   <nav class="tabs">
     <button data-tab="shot" class="active">Shot List<span class="count" id="c-shot"></span></button>
     <button data-tab="notes">Notes<span class="count" id="c-notes"></span></button>
-    <button data-tab="sl1">SL 1<span class="count" id="c-sl1"></span></button>
+    <button data-tab="audio">Audio<span class="count" id="c-audio"></span></button>
     <button data-tab="meet">Meeting</button>
   </nav>
 </header>
@@ -186,7 +208,7 @@
 <main>
   <section id="tab-shot" class="panel active"></section>
   <section id="tab-notes" class="panel"></section>
-  <section id="tab-sl1" class="panel"></section>
+  <section id="tab-audio" class="panel"></section>
   <section id="tab-meet" class="panel">
     <!-- Google Meet refuses to load inside other pages, so this tab opens the call in a new tab. -->
     <div class="card meet">
@@ -273,10 +295,10 @@ function lines(v) { return Math.min(8, Math.max(1, String(v || '').split(/\n/).l
 function renderAll() {
   const s = DATA.shot;
   renderSub();
-  ['shot', 'sl1'].forEach(k => { $('#c-' + k).textContent = DATA[k].rows.length; });
+  $('#c-shot').textContent = DATA.shot.rows.length;
   refreshNoteCount();
   renderLists();
-  renderShot(); renderNotes(); renderSl1();
+  renderShot(); renderNotes(); renderAudio();
 }
 
 // Header line under the app name: the shoot title from cell A1 and the shoot date.
@@ -517,6 +539,7 @@ function renderNotes() {
     ${editor}
     <div id="notes-list"></div>`;
   renderNoteList();
+  if ($('#media-list')) renderMediaList(); // admin Delete buttons on uploads follow the lock state
 }
 
 function renderNoteList() {
@@ -589,6 +612,117 @@ document.addEventListener('change', e => {
 });
 
 function refreshNoteCount() { $('#c-notes').textContent = (DATA.notes || []).length; }
+
+/* ---------- Audio tab: main song + anyone can upload audio/video; admins can delete ---------- */
+const MAIN_SONG_ID = '1CkKGSMxOjp23Lfbn9hchwF7S1qrRgbRZ';
+const MAX_MEDIA_MB = 35;
+const MEDIA_ACCEPT = '.mp3,.m4a,.wav,.aac,.ogg,.mp4,.mov,.m4v,.webm';
+const drivePreview = id => 'https://drive.google.com/file/d/' + id + '/preview';
+const driveView = id => 'https://drive.google.com/file/d/' + id + '/view';
+let PLAYING = null;
+let UPLOADER = '';
+try { UPLOADER = localStorage.getItem('uploader') || ''; } catch (_) {}
+
+// The players are built once so the 60-second refresh doesn't stop the music; only the list re-renders.
+function renderAudio() {
+  if (!$('#media-list')) {
+    $('#tab-audio').innerHTML = `
+      <div class="card song">
+        <div class="song-head"><h2>🎵 Main song</h2>
+          <a class="btn small" href="${driveView(MAIN_SONG_ID)}" target="_blank" rel="noopener">Open in Drive ↗</a></div>
+        <iframe class="song-frame" src="${drivePreview(MAIN_SONG_ID)}" allow="autoplay" title="Main song"></iframe>
+      </div>
+      <div id="media-player"></div>
+      <div class="card upload-card">
+        <h3>Upload audio or video</h3>
+        <div class="upload-row">
+          <div><label class="lbl">Your name</label><input id="media-by" value="${esc(UPLOADER)}" placeholder="e.g. Jay Ann"></div>
+          <div><label class="lbl">Title</label><input id="media-title" placeholder="e.g. Voice-over take 2"></div>
+        </div>
+        <div class="upload-row">
+          <input type="file" id="media-file" accept="${MEDIA_ACCEPT}">
+          <button class="btn primary" data-media="upload">Upload</button>
+        </div>
+        <small class="hint">MP3, M4A, WAV, MP4, MOV… up to ${MAX_MEDIA_MB} MB. Files are saved to Google Drive.</small>
+      </div>
+      <div id="media-list"></div>`;
+  }
+  renderMediaList();
+}
+
+function renderMediaList() {
+  const list = (DATA.media || []).slice().reverse();
+  $('#c-audio').textContent = list.length;
+  $('#media-list').innerHTML = list.length ? `<h3 class="list-title">Uploads</h3><div class="media">${list.map(m => `
+      <article class="media-item ${PLAYING && PLAYING.id === m.id ? 'playing' : ''}">
+        <div class="media-icon">${m.kind === 'Video' ? '🎬' : '🎧'}</div>
+        <div class="media-info">
+          <b>${esc(m.title || m.name)}</b>
+          <span>${esc([m.kind, m.size ? m.size + ' MB' : '', m.by ? 'by ' + m.by : '', m.uploaded].filter(Boolean).join(' · '))}</span>
+        </div>
+        <div class="media-actions">
+          <button class="btn small primary" data-media="play" data-id="${esc(m.id)}">▶ Play</button>
+          <a class="btn small" href="${driveView(m.driveId)}" target="_blank" rel="noopener">Open ↗</a>
+          ${ADMIN ? `<button class="btn small danger" data-media="delete" data-id="${esc(m.id)}">Delete</button>` : ''}
+        </div>
+      </article>`).join('')}</div>`
+    : '<div class="empty card">No uploads yet.</div>';
+}
+
+function renderPlayer() {
+  $('#media-player').innerHTML = PLAYING ? `<div class="card song">
+      <div class="song-head"><h2>${PLAYING.kind === 'Video' ? '🎬' : '🎧'} ${esc(PLAYING.title || PLAYING.name)}</h2>
+        <button class="btn small" data-media="close">Close</button></div>
+      <iframe class="song-frame ${PLAYING.kind === 'Video' ? 'video' : ''}" src="${drivePreview(PLAYING.driveId)}" allow="autoplay" title="Player"></iframe>
+    </div>` : '';
+}
+
+function readAsBase64(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(String(fr.result).split(',')[1]);
+    fr.onerror = () => rej(new Error('Could not read the file.'));
+    fr.readAsDataURL(file);
+  });
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-media]');
+  if (!b) return;
+  const act = b.dataset.media;
+  if (act === 'play') {
+    PLAYING = (DATA.media || []).find(m => m.id === b.dataset.id) || null;
+    renderPlayer(); renderMediaList();
+    return $('#media-player').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  if (act === 'close') { PLAYING = null; renderPlayer(); return renderMediaList(); }
+  if (act === 'delete') {
+    if (!confirm('Delete this upload? The file moves to the Drive trash.')) return;
+    try {
+      DATA.media = await save('deleteMedia', [ADMIN, b.dataset.id]);
+      if (PLAYING && PLAYING.id === b.dataset.id) { PLAYING = null; renderPlayer(); }
+      renderMediaList(); toast('Upload deleted');
+    } catch (_) {}
+    return;
+  }
+  if (act === 'upload') {
+    const file = $('#media-file').files[0];
+    if (!file) return toast('Choose an audio or video file first', true);
+    const type = file.type || '';
+    if (!type.startsWith('audio' + '/') && !type.startsWith('video' + '/')) return toast('Only audio (MP3) and video files can be uploaded', true);
+    if (file.size > MAX_MEDIA_MB * 1048576) return toast('That file is over ' + MAX_MEDIA_MB + ' MB', true);
+    UPLOADER = $('#media-by').value.trim();
+    try { localStorage.setItem('uploader', UPLOADER); } catch (_) {}
+    b.disabled = true; b.textContent = 'Uploading…';
+    try {
+      const base64 = await readAsBase64(file);
+      DATA.media = await save('uploadMedia', [{ name: file.name, mime: type, title: $('#media-title').value.trim(), by: UPLOADER }, base64]);
+      $('#media-file').value = ''; $('#media-title').value = '';
+      renderMediaList(); toast('Uploaded');
+    } catch (_) {}
+    finally { b.disabled = false; b.textContent = 'Upload'; }
+  }
+});
 
 function renderSl1() {
   const d = DATA.sl1, si = col(d, 'status');
@@ -841,7 +975,8 @@ const MOCK = (() => {
         locked: [false, false, i === 5 || i === 6, false, false, false, false, false, false, false], img: Array(10).fill('') })) },
     team: { key: 'team', sheet: 'TEAM', headers: ['Name', 'Role', 'Contact No.', 'Email', 'Assignment', 'Notes'], rows: [] },
     sl1: { key: 'sl1', sheet: 'SL 1', headers: ['Shot #', 'Time', 'Location', 'Shot Description', 'Shot Type', 'Camera / Angle', 'Subject / Talent', 'Assigned To', 'Status', 'Notes'], rows: [] },
-    notes: []
+    notes: [],
+    media: []
   };
   let noteId = 0;
   const stamp = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -856,6 +991,12 @@ const MOCK = (() => {
       else db.notes.push({ ...n, id: 'n' + (++noteId), updated: stamp(), created: stamp() });
       return ok(JSON.parse(JSON.stringify(db.notes)));
     },
+    uploadMedia: (info, b64) => {
+      db.media.push({ id: 'm' + (++noteId), title: info.title || info.name, name: info.name, kind: info.mime.startsWith('video') ? 'Video' : 'Audio',
+        size: Math.round(b64.length * 0.75 / 104857.6) / 10, by: info.by, uploaded: stamp(), driveId: MAIN_SONG_ID });
+      return ok(JSON.parse(JSON.stringify(db.media)));
+    },
+    deleteMedia: (t, id) => { db.media = db.media.filter(x => x.id !== id); return ok(JSON.parse(JSON.stringify(db.media))); },
     deleteNote: (t, id) => { db.notes = db.notes.filter(x => x.id !== id); return ok(JSON.parse(JSON.stringify(db.notes))); },
     updateCell: (k, r, c, v) => { const x = db[k].rows.find(y => y.row === r); if (x) x.cells[c - 1] = v; return ok(true); },
     setDate: v => { db.shot.date = v; return ok(true); },

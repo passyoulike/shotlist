@@ -23,7 +23,8 @@ deployed there (see below).
 - **Shot List**: headings in row 4 (Time, Location, Faculty / CI, Status, Notes, CATEGORY, then one column per shot type). Row 1 photos live in the shot-type cells.
 - **PHOTOS**: photos 2–5 for each shot type, plus the **Video Done** checkbox for every photo. Created automatically.
 - **NOTES**: the Notes tab (created automatically). Anyone can read; editing needs the admin password, stored in Project Settings → Script Properties as `NOTES_PASSWORD` (never in this repo).
-- **SL 1**: the SL 1 tab. **TEAM** is no longer shown in the app.
+- **MEDIA**: uploads from the Audio tab (files go to the Drive folder "Radi Production Shot List Media"). Anyone can upload audio/video up to 35 MB; only an unlocked admin can delete.
+- **TEAM** and **SL 1** are no longer shown in the app.
 
 ## Deploying a change
 
