@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAHS Shot List</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#fff; --ink:#1d2330; --muted:#6b7280; --line:#e3e6eb;
+    --brand:#0f5c4d; --brand-soft:#e3f1ed; --accent:#d97706;
+    --pending:#9ca3af; --shooting:#2563eb; --done:#16a34a; --skip:#b91c1c;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header.top{background:var(--brand);color:#fff;padding:16px 16px 0}
+  .top-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;max-width:1200px;margin:0 auto}
+  h1{margin:0;font-size:18px;font-weight:650}
+  .sub{opacity:.8;font-size:12px;margin-top:2px}
+  #saveState{font-size:12px;background:rgba(255,255,255,.15);padding:4px 10px;border-radius:99px;white-space:nowrap}
+  nav.tabs{display:flex;gap:4px;max-width:1200px;margin:14px auto 0}
+  nav.tabs button{flex:0 0 auto;border:0;background:transparent;color:#fff;opacity:.75;padding:10px 16px;font:inherit;font-weight:600;border-radius:10px 10px 0 0;cursor:pointer}
+  nav.tabs button.active{background:var(--bg);color:var(--brand);opacity:1}
+  nav.tabs .count{font-size:11px;background:rgba(0,0,0,.12);border-radius:99px;padding:1px 7px;margin-left:6px}
+  main{max-width:1200px;margin:0 auto;padding:16px}
+  .panel{display:none}.panel.active{display:block}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+  .toolbar input[type=search]{flex:1 1 200px;min-width:0}
+  input,textarea,select{font:inherit;color:inherit;border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 9px;width:100%}
+  textarea{resize:vertical;min-height:36px}
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--brand);outline-offset:-1px;border-color:transparent}
+  [readonly]{background:#f8f9fa;color:var(--muted)}
+  button.btn{border:1px solid var(--line);background:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+  button.btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button.del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:16px;padding:6px;border-radius:6px}
+  button.del:hover{background:#fee2e2;color:var(--skip)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+  .summary{display:grid;grid-template-columns:minmax(180px,260px) 1fr;gap:16px;align-items:end;margin-bottom:12px}
+  label.lbl{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px}
+  .prog .bar{height:10px;background:var(--line);border-radius:99px;overflow:hidden}
+  .prog .bar span{display:block;height:100%;background:var(--done);transition:width .3s}
+  .prog .txt{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:6px}
+
+  /* Shot list slots */
+  .slots{display:grid;gap:10px}
+  .slot{display:grid;grid-template-columns:170px 1fr 150px;gap:14px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--pending);border-radius:var(--radius);padding:12px}
+  .slot.st-shooting{border-left-color:var(--shooting)}
+  .slot.st-done{border-left-color:var(--done);background:#f6fbf7}
+  .slot.st-skipped{border-left-color:var(--skip);opacity:.75}
+  .slot .time input{font-weight:700;font-size:15px}
+  .slot .body{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .slot .body .full{grid-column:1/-1}
+  .slot .side{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+  .slot .side .del{align-self:flex-end}
+  .merged-note{font-size:11px;color:var(--muted);margin-top:2px}
+
+  /* Tables */
+  .table-wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--radius)}
+  table{border-collapse:collapse;width:100%;min-width:900px}
+  th,td{padding:6px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:#fafbfc;position:sticky;top:0;white-space:nowrap;padding:10px 6px}
+  td input,td select,td textarea{border-color:transparent;background:transparent}
+  td input:hover,td textarea:hover,td select:hover{border-color:var(--line)}
+  td.num{width:70px}
+  td.ro{color:var(--muted);text-align:center;padding-top:13px}
+  tr.st-done td{background:#f6fbf7}
+  tr.st-reshoot td{background:#fff7ed}
+
+  select.status{font-weight:600}
+  select.status.v-done{color:var(--done)} select.status.v-shooting,select.status.v-in-progress{color:var(--shooting)}
+  select.status.v-skipped,select.status.v-reshoot{color:var(--skip)}
+
+  /* Category chips + photo board */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:99px;padding:7px 14px;font:inherit;font-weight:600;cursor:pointer}
+  .chip span{font-size:11px;color:var(--muted);margin-left:4px}
+  .chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .chip.on span{color:rgba(255,255,255,.8)}
+  .board-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
+  .board-head{align-items:center;flex-wrap:wrap}
+  .board-head h2{margin:0;font-size:17px}
+  .board-head span{color:var(--muted);font-size:12px;margin-left:auto}
+  .ph-gap{aspect-ratio:4/3}
+  .board-head .donecount{color:var(--done)}
+  .vdone{position:absolute;left:6px;bottom:6px;display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.92);color:var(--ink);font-size:11px;font-weight:600;padding:3px 8px 3px 5px;border-radius:99px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+  .vdone input{width:15px;height:15px;margin:0;accent-color:var(--done);cursor:pointer}
+  .ph.is-done{outline:4px solid var(--done);outline-offset:-4px}
+  .ph.is-done .vdone{background:var(--done);color:#fff}
+  .nophotos{color:var(--muted);font-size:12px;padding:4px 12px 2px}
+  .slotboard{margin-top:18px}
+  .slotboard:first-of-type{margin-top:0}
+  .slothead{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:10px 12px;background:var(--brand-soft);border-radius:10px;margin-bottom:8px}
+  .slottime{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .slottime b{font-size:15px;color:var(--brand)}.slottime span{font-size:13px;color:var(--muted)}
+  .chip.slotcat{padding:3px 10px;font-size:11px;background:var(--brand);border-color:var(--brand);color:#fff}
+  .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:start}
+  .tile{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .tlabel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tlabel small{font-weight:600;color:var(--brand)}
+  .colh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:center;align-self:end}
+  .ph{position:relative;aspect-ratio:4/3;border-radius:10px;overflow:hidden;background:#f1f3f5;border:2px dashed #d4d8de;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--muted);font-size:12px;text-align:center;padding:6px}
+  .ph.has{border:0;padding:0;background:#000}
+  .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .ph .plus{font-size:22px;line-height:1}
+  .ph .tag{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:2px 6px;border-radius:6px}
+  .ph .armed-ui{display:none}
+  .ph.armed{border-color:var(--brand);border-style:solid;background:var(--brand-soft);color:var(--brand)}
+  .ph.armed .idle-ui{display:none}.ph.armed .armed-ui{display:flex;flex-direction:column;gap:6px;align-items:center}
+  .ph.busy::after{content:'Uploading…';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.85);color:var(--brand);font-weight:600}
+  #lb{position:fixed;inset:0;background:rgba(10,14,20,.88);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+  #lb .lb-box{max-width:min(1100px,100%);max-height:100%;display:flex;flex-direction:column;gap:10px}
+  #lb img{max-width:100%;max-height:calc(100vh - 110px);object-fit:contain;border-radius:8px;background:#000}
+  #lb .lb-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:#fff}
+  #lb .lb-bar span{flex:1;min-width:160px;font-weight:600}
+
+  .empty{text-align:center;padding:40px 16px;color:var(--muted)}
+  .hidden{display:none!important}
+  #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1d2330;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw}
+  #toast.show{opacity:1}
+  #toast.err{background:var(--skip)}
+
+  @media (max-width:760px){
+    .summary{grid-template-columns:1fr}
+    .slot{grid-template-columns:1fr}
+    .slot .body{grid-template-columns:1fr}
+    .slot .side{flex-direction:row;align-items:center}
+    nav.tabs button{padding:10px 12px}
+    .grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+    .tlabel{font-size:9px}
+    .ph{font-size:10px}
+    .ph .tag{display:none}
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <div><h1 id="title">Shot List</h1><div class="sub" id="sub">Loading…</div></div>
+    <div id="saveState">Loading…</div>
+  </div>
+  <nav class="tabs">
+    <button data-tab="shot" class="active">Shot List<span class="count" id="c-shot"></span></button>
+    <button data-tab="team">Team<span class="count" id="c-team"></span></button>
+    <button data-tab="sl1">SL 1<span class="count" id="c-sl1"></span></button>
+  </nav>
+</header>
+
+<main>
+  <section id="tab-shot" class="panel active"></section>
+  <section id="tab-team" class="panel"></section>
+  <section id="tab-sl1" class="panel"></section>
+</main>
+
+<datalist id="dl-times"></datalist>
+<datalist id="dl-locs"></datalist>
+<datalist id="dl-team"></datalist>
+<datalist id="dl-types"></datalist>
+<div id="toast"></div>
+<div id="lb" class="hidden">
+  <div class="lb-box">
+    <img id="lb-img" alt="">
+    <div class="lb-bar">
+      <span id="lb-cap"></span>
+      <button class="btn" data-lb="replace">Replace</button>
+      <button class="btn" data-lb="remove">Remove</button>
+      <button class="btn primary" data-lb="close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STATUS = { shot: ['Pending', 'Shooting', 'Done', 'Skipped'], sl1: ['Pending', 'In Progress', 'Done', 'Reshoot'] };
+const SHOT_TYPES = ['Wide', 'Medium', 'Close-up', 'Extreme close-up', 'B-roll', 'Interview', 'Detail', 'Group', 'Drone'];
+let DATA = null, pending = 0;
+
+/* ---------- server bridge (falls back to sample data when opened outside Apps Script) ---------- */
+function api(fn, ...args) {
+  if (typeof google === 'undefined' || !google.script) return MOCK[fn](...args);
+  return new Promise((res, rej) =>
+    google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
+}
+
+async function load(quiet) {
+  if (!quiet) setState('Loading…');
+  try {
+    DATA = await api('getData');
+    renderAll();
+    setState('Synced ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  } catch (e) { fail(e); }
+}
+
+async function save(fn, args) {
+  pending++; setState('Saving…');
+  try { const r = await api(fn, ...args); setState('Saved ✓'); return r; }
+  catch (e) { fail(e); throw e; }
+  finally { pending--; }
+}
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const slug = v => String(v || '').toLowerCase().replace(/\s+/g, '-');
+const col = (d, name) => d.headers.findIndex(h => String(h).trim().toLowerCase() === name);
+const colStarts = (d, name) => d.headers.findIndex(h => String(h).trim().toLowerCase().startsWith(name));
+const uniq = a => [...new Set(a.map(s => String(s).trim()).filter(Boolean))];
+function setState(t) { $('#saveState').textContent = t; }
+function toast(msg, err) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
+  clearTimeout(t._h); t._h = setTimeout(() => t.className = '', 3000);
+}
+function fail(e) { setState('Error'); toast((e && e.message) || String(e), true); }
+function rowText(r) { return r.cells.join(' ').toLowerCase(); }
+function statusSelect(key, r, ci) {
+  const v = r.cells[ci] || '';
+  const opts = ['', ...uniq([...STATUS[key], v])]
+    .map(o => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${o ? esc(o) : '—'}</option>`).join('');
+  return `<select class="status v-${slug(v)}" data-k="${key}" data-r="${r.row}" data-c="${ci + 1}">${opts}</select>`;
+}
+function lines(v) { return Math.min(8, Math.max(1, String(v || '').split(/\n/).length)); }
+
+/* ---------- rendering ---------- */
+function renderAll() {
+  const s = DATA.shot;
+  $('#title').textContent = s.title || 'Shot List';
+  $('#sub').textContent = s.date ? 'Shoot date: ' + s.date : 'Shoot date not set';
+  ['shot', 'team', 'sl1'].forEach(k => { $('#c-' + k).textContent = DATA[k].rows.length; });
+  renderLists();
+  renderShot(); renderTeam(); renderSl1();
+}
+
+function renderLists() {
+  const s = DATA.shot, t = DATA.team;
+  const opt = a => a.map(v => `<option value="${esc(v)}">`).join('');
+  $('#dl-times').innerHTML = opt(uniq(s.rows.map(r => r.cells[0])));
+  $('#dl-locs').innerHTML = opt(uniq(s.rows.map(r => r.cells[1])));
+  $('#dl-team').innerHTML = opt(uniq(t.rows.map(r => r.cells[0])));
+  $('#dl-types').innerHTML = opt(SHOT_TYPES);
+}
+
+function toolbar(key, addLabel) {
+  return `<div class="toolbar">
+    <input type="search" placeholder="Search…" data-search="${key}">
+    <button class="btn primary" data-add="${key}">+ ${addLabel}</button>
+    <button class="btn" data-refresh>↻ Refresh</button>
+  </div>`;
+}
+
+function progress(done, total, label) {
+  const pct = total ? Math.round(done / total * 100) : 0;
+  return `<div class="prog"><div class="bar"><span style="width:${pct}%"></span></div>
+    <div class="txt"><span>${done} of ${total} ${label}</span><span>${pct}%</span></div></div>`;
+}
+
+/* ---------- categories & photos (Shot List columns: CATEGORY, then one photo column per shot type) ---------- */
+const EDIT = '__edit__';
+let CAT = '';
+try { CAT = localStorage.getItem('cat') || ''; } catch (_) {}
+
+// A category applies to its own row and every row below it until the next category is set.
+function shotCats(d) {
+  const ci = col(d, 'category');
+  let cur = '';
+  return d.rows.map(r => { const v = ci < 0 ? '' : String(r.cells[ci] || '').trim(); if (v) cur = v; return cur; });
+}
+function photoCols(d) {
+  const ci = col(d, 'category');
+  return ci < 0 ? [] : d.headers.map((h, i) => i).filter(i => i > ci && String(d.headers[i]).trim());
+}
+function toImg(text) {
+  const t = String(text || '').trim();
+  const m = /drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]{20,})/.exec(t);
+  if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1600';
+  return /^https?:\/\//i.test(t) ? t : '';
+}
+const TAKES = 5; // photo rows under each time slot (row 1 = the Shot List cell, rows 2-5 = PHOTOS sheet)
+let SHOW_EMPTY = false; // empty photo boxes are hidden until "+ Add photos" is pressed
+
+function photo(r, ci, take) {
+  if (!take || take === 1) return (r.img && r.img[ci]) || toImg(r.cells[ci]);
+  const x = (DATA.shot.extra || []).find(p => p.slot === r.row && p.col === ci + 1 && p.take === take);
+  return x ? x.url : '';
+}
+
+function isDone(r, ci, take) {
+  return (DATA.shot.extra || []).some(p => p.slot === r.row && p.col === ci + 1 && p.take === take && p.done);
+}
+
+function phCell(d, r, ci, take) {
+  const u = photo(r, ci, take), a = `data-ph data-r="${r.row}" data-c="${ci + 1}" data-t="${take}" tabindex="0"`;
+  const done = u && isDone(r, ci, take);
+  return u
+    ? `<div class="ph has ${done ? 'is-done' : ''}" ${a}><img src="${esc(u)}" loading="lazy" alt="${esc(d.headers[ci])}">
+        <label class="vdone" title="Tick when this video is done"><input type="checkbox" data-done ${done ? 'checked' : ''}>Video done</label></div>`
+    : `<div class="ph" ${a}>
+        <div class="idle-ui"><div class="plus">+</div>Add photo</div>
+        <div class="armed-ui"><button class="btn primary" data-upload>Upload</button><small>or paste (Ctrl+V)</small></div>
+      </div>`;
+}
+
+// rows: the time slots to show; catOf: the category of each of those rows (shown as a chip under the time)
+function renderBoard(d, rows, pcols, catOf) {
+  let filled = 0, doneCount = 0;
+  rows.forEach(r => pcols.forEach(ci => {
+    for (let t = 1; t <= TAKES; t++) if (photo(r, ci, t)) { filled++; if (isDone(r, ci, t)) doneCount++; }
+  }));
+  const slots = rows.map((r, i) => {
+    // Only shot types that have a picture are shown, 5 per row, wrapping below.
+    // While adding photos, each shot type also gets one empty box (its next free photo number).
+    const tiles = [];
+    pcols.forEach(ci => {
+      let next = 0;
+      for (let t = 1; t <= TAKES; t++) {
+        if (photo(r, ci, t)) tiles.push([ci, t]);
+        else if (!next) next = t;
+      }
+      if (SHOW_EMPTY && next) tiles.push([ci, next]);
+    });
+    const label = (ci, t) => esc(d.headers[ci]) + (t > 1 ? ` <small>#${t}</small>` : '');
+    const cat = catOf[i];
+    return `<section class="slotboard" data-text="${esc(rowText(r) + ' ' + cat.toLowerCase())}">
+      <div class="slothead">
+        <div class="slottime"><b>${esc(r.cells[0])}</b><span>${esc(r.cells[1])}</span></div>
+        ${cat ? `<button class="chip slotcat" data-cat="${esc(cat)}" title="Show only ${esc(cat)}">${esc(cat)}</button>` : ''}
+      </div>
+      ${tiles.length ? `<div class="grid">
+        ${tiles.map(([ci, t]) => `<div class="tile"><div class="tlabel">${label(ci, t)}</div>${phCell(d, r, ci, t)}</div>`).join('')}
+      </div>` : '<div class="nophotos">No photos yet</div>'}
+    </section>`;
+  }).join('');
+  return `<div class="card">
+    <div class="board-head"><h2>${esc(CAT || 'All time slots')}</h2>
+      <span><b class="donecount">${doneCount} of ${filled} videos done</b> · ${filled} photos · ${rows.length} time slot${rows.length === 1 ? '' : 's'}</span>
+      <button class="btn ${SHOW_EMPTY ? 'primary' : ''}" data-showempty>${SHOW_EMPTY ? 'Done adding' : '+ Add photos'}</button>
+    </div>
+    ${pcols.length ? slots : '<div class="empty">Add shot-type headings to the right of CATEGORY in the sheet (e.g. CLOSE UP, MEDIUM).</div>'}
+  </div>`;
+}
+
+function renderShot() {
+  const d = DATA.shot, si = col(d, 'status'), ni = col(d, 'notes'), ci = col(d, 'category');
+  const done = d.rows.filter(r => r.cells[si] === 'Done').length;
+  const cats = shotCats(d), names = uniq(cats), pcols = photoCols(d);
+  // CAT: '' = every time slot's photos on one page, a category name = only that category, EDIT = the editable slot list.
+  if (CAT && CAT !== EDIT && !names.includes(CAT)) CAT = '';
+  const chips = `<div class="chips">
+      <button class="chip ${CAT ? '' : 'on'}" data-cat="">All</button>
+      ${names.map(n => `<button class="chip ${n === CAT ? 'on' : ''}" data-cat="${esc(n)}">${esc(n)}<span>${cats.filter(c => c === n).length}</span></button>`).join('')}
+      <button class="chip ${CAT === EDIT ? 'on' : ''}" data-cat="${EDIT}">✎ Edit slots</button>
+    </div>`;
+  const shown = d.rows.map((r, i) => i).filter(i => !CAT || cats[i] === CAT);
+  const slots = d.rows.map(r => {
+    const st = r.cells[si] || '', lockedFac = r.locked[2];
+    const f = (ci, tag) => tag === 'ta'
+      ? `<textarea data-k="shot" data-r="${r.row}" data-c="${ci + 1}" rows="${lines(r.cells[ci])}" ${r.locked[ci] ? 'readonly' : ''}>${esc(r.cells[ci])}</textarea>`
+      : `<input data-k="shot" data-r="${r.row}" data-c="${ci + 1}" value="${esc(r.cells[ci])}" ${r.locked[ci] ? 'readonly' : ''}>`;
+    return `<article class="slot st-${slug(st)}" data-row="${r.row}" data-text="${esc(rowText(r))}">
+      <div class="time"><label class="lbl">Time</label>${f(0)}</div>
+      <div class="body">
+        <div><label class="lbl">Location</label>${f(1)}</div>
+        <div><label class="lbl">Faculty / CI</label>${f(2, 'ta')}${lockedFac ? '<div class="merged-note">Shared with the slot above (merged cell)</div>' : ''}</div>
+        ${ci >= 0 ? `<div><label class="lbl">Category</label>${f(ci)}</div>` : ''}
+        <div class="${ci >= 0 ? '' : 'full'}"><label class="lbl">Notes</label>${f(ni)}</div>
+      </div>
+      <div class="side"><div style="flex:1"><label class="lbl">Status</label>${statusSelect('shot', r, si)}</div>
+        <button class="del" title="Delete slot" data-del="shot" data-r="${r.row}">✕</button></div>
+    </article>`;
+  }).join('');
+
+  $('#tab-shot').innerHTML = `
+    <div class="summary card">
+      <div><label class="lbl">Shoot date</label><input data-date value="${esc(d.date)}" placeholder="e.g. Oct 10, 2026"></div>
+      <div data-prog="shot">${progress(done, d.rows.length, 'slots done')}</div>
+    </div>
+    ${chips}
+    ${toolbar('shot', 'Add time slot')}
+    ${CAT === EDIT || !pcols.length
+      ? `<div class="slots">${slots || '<div class="empty card">No time slots yet.</div>'}</div>`
+      : renderBoard(d, shown.map(i => d.rows[i]), pcols, shown.map(i => cats[i]))}`;
+}
+
+function renderTable(key, extraHead, extraCell) {
+  const d = DATA[key];
+  const body = d.rows.map(r => {
+    const st = col(d, 'status') >= 0 ? r.cells[col(d, 'status')] : '';
+    const cells = d.headers.map((h, ci) => `<td class="${ci === 0 && key === 'sl1' ? 'num' : ''}">${field(key, d, r, ci)}</td>`).join('');
+    return `<tr class="st-${slug(st)}" data-row="${r.row}" data-text="${esc(rowText(r))}">${cells}${extraCell ? extraCell(r) : ''}
+      <td><button class="del" title="Delete row" data-del="${key}" data-r="${r.row}">✕</button></td></tr>`;
+  }).join('');
+  return `<div class="table-wrap"><table>
+    <thead><tr>${d.headers.map(h => `<th>${esc(h)}</th>`).join('')}${extraHead || ''}<th></th></tr></thead>
+    <tbody>${body || `<tr><td colspan="${d.headers.length + 2}" class="empty">No rows yet. Click “+ Add”.</td></tr>`}</tbody>
+  </table></div>`;
+}
+
+function field(key, d, r, ci) {
+  const h = String(d.headers[ci]).trim().toLowerCase(), v = r.cells[ci];
+  const a = `data-k="${key}" data-r="${r.row}" data-c="${ci + 1}" ${r.locked[ci] ? 'readonly' : ''}`;
+  if (h === 'status' && STATUS[key]) return statusSelect(key, r, ci);
+  if (h.includes('description') || h === 'notes') return `<textarea ${a} rows="${lines(v)}">${esc(v)}</textarea>`;
+  let list = '';
+  if (key === 'sl1') {
+    if (h === 'time') list = 'dl-times';
+    else if (h === 'location') list = 'dl-locs';
+    else if (h.startsWith('assigned')) list = 'dl-team';
+    else if (h === 'shot type') list = 'dl-types';
+  } else if (key === 'team' && h === 'assignment') list = 'dl-locs';
+  return `<input ${a} value="${esc(v)}" ${list ? `list="${list}"` : ''}>`;
+}
+
+function renderTeam() {
+  const s = DATA.sl1, ai = colStarts(s, 'assigned');
+  const shotsFor = name => !name.trim() || ai < 0 ? 0 :
+    s.rows.filter(r => String(r.cells[ai]).toLowerCase().includes(name.trim().toLowerCase())).length;
+  $('#tab-team').innerHTML = toolbar('team', 'Add member') +
+    renderTable('team', '<th>Shots</th>', r => `<td class="ro">${shotsFor(r.cells[0])}</td>`);
+}
+
+function renderSl1() {
+  const d = DATA.sl1, si = col(d, 'status');
+  const done = d.rows.filter(r => r.cells[si] === 'Done').length;
+  $('#tab-sl1').innerHTML = `<div class="card" style="margin-bottom:12px" data-prog="sl1">${progress(done, d.rows.length, 'shots done')}</div>` +
+    toolbar('sl1', 'Add shot') + renderTable('sl1');
+}
+
+function refreshProgress(key) {
+  const d = DATA[key], si = col(d, 'status'), el = document.querySelector(`[data-prog="${key}"]`);
+  if (!el) return;
+  el.innerHTML = progress(d.rows.filter(r => r.cells[si] === 'Done').length, d.rows.length, key === 'shot' ? 'slots done' : 'shots done');
+}
+
+/* ---------- photo upload / paste / viewer ---------- */
+let PICK = null, LB = null;
+const fileIn = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*' });
+fileIn.addEventListener('change', () => {
+  const f = fileIn.files[0]; fileIn.value = '';
+  if (f && PICK) upload(PICK.r, PICK.c, PICK.t, f);
+});
+
+const phSel = (r, c, t) => `.ph[data-r="${r}"][data-c="${c}"][data-t="${t}"]`;
+
+function arm(r, c, t) {
+  PICK = { r, c, t };
+  document.querySelectorAll('.ph.armed').forEach(n => n.classList.remove('armed'));
+  document.querySelector(phSel(r, c, t) + ':not(.has)')?.classList.add('armed');
+}
+
+// Update the local copy after an upload/removal (take 1 = Shot List cell, 2-5 = PHOTOS sheet).
+function setPhoto(r, c, t, url) {
+  const same = p => p.slot === r && p.col === c && p.take === t;
+  const prev = (DATA.shot.extra || []).find(same);
+  const ex = DATA.shot.extra = (DATA.shot.extra || []).filter(p => !same(p));
+  if (t === 1) {
+    const rec = DATA.shot.rows.find(x => x.row === r);
+    if (rec) { rec.img = rec.img || []; rec.img[c - 1] = url; rec.cells[c - 1] = ''; }
+    if (url && prev && prev.done) ex.push(prev); // replacing keeps the tick; removing clears it
+    return;
+  }
+  if (url) ex.push({ slot: r, col: c, take: t, url, done: !!(prev && prev.done) });
+}
+
+function setDone(r, c, t, done) {
+  const ex = DATA.shot.extra = DATA.shot.extra || [];
+  let p = ex.find(x => x.slot === r && x.col === c && x.take === t);
+  if (!p) ex.push(p = { slot: r, col: c, take: t, url: '', done });
+  p.done = done;
+}
+
+function refreshDoneCount() {
+  const el = document.querySelector('.donecount');
+  if (!el) return;
+  const all = document.querySelectorAll('#tab-shot .ph.has').length;
+  el.textContent = `${document.querySelectorAll('#tab-shot .ph.is-done').length} of ${all} videos done`;
+}
+
+function shrink(file) { // resize to max 1600px JPEG so uploads stay small
+  return new Promise((res, rej) => {
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const cv = Object.assign(document.createElement('canvas'), { width: Math.round(img.width * s), height: Math.round(img.height * s) });
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(u);
+      res(cv.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    };
+    img.onerror = () => rej(new Error('That file is not an image.'));
+    img.src = u;
+  });
+}
+
+async function upload(r, c, t, file) {
+  const cell = document.querySelector(phSel(r, c, t));
+  cell?.classList.add('busy');
+  try {
+    const b64 = await shrink(file);
+    const name = [CAT || 'shot', DATA.shot.headers[c - 1], 'row ' + r, 'photo ' + t].join(' - ') + '.jpg';
+    const url = await save('uploadPhoto', [r, c, t, name, b64, 'image/jpeg']);
+    setPhoto(r, c, t, url);
+    PICK = null; renderShot(); toast('Photo saved');
+  } catch (e) { cell?.classList.remove('busy'); fail(e); }
+}
+
+function openLb(r, c, t) {
+  const rec = DATA.shot.rows.find(x => x.row === r);
+  LB = { r, c, t };
+  $('#lb-img').src = photo(rec, c - 1, t);
+  $('#lb-cap').textContent = [CAT, rec.cells[0], DATA.shot.headers[c - 1], 'Photo ' + t].filter(Boolean).join(' · ');
+  $('#lb').classList.remove('hidden');
+}
+function closeLb() { $('#lb').classList.add('hidden'); $('#lb-img').src = ''; LB = null; }
+
+document.addEventListener('paste', e => {
+  if (!PICK || !$('#tab-shot').classList.contains('active')) return;
+  const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+  if (!item) return;
+  e.preventDefault();
+  upload(PICK.r, PICK.c, PICK.t, item.getAsFile());
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && LB) closeLb(); });
+
+document.addEventListener('change', e => {
+  if (e.target.dataset.done === undefined) return;
+  const ph = e.target.closest('[data-ph]'), r = +ph.dataset.r, c = +ph.dataset.c, t = +ph.dataset.t;
+  const done = e.target.checked;
+  setDone(r, c, t, done);
+  ph.classList.toggle('is-done', done);
+  refreshDoneCount();
+  save('setVideoDone', [r, c, t, done]).catch(() => {
+    e.target.checked = !done; setDone(r, c, t, !done); ph.classList.toggle('is-done', !done); refreshDoneCount();
+  });
+});
+
+document.addEventListener('click', async e => {
+  const chip = e.target.closest('[data-cat]');
+  if (chip) {
+    CAT = chip.dataset.cat; PICK = null;
+    try { localStorage.setItem('cat', CAT); } catch (_) {}
+    return renderShot();
+  }
+  if (e.target.closest('[data-showempty]')) {
+    SHOW_EMPTY = !SHOW_EMPTY; PICK = null;
+    return renderShot();
+  }
+  const lbBtn = e.target.closest('[data-lb]');
+  if (lbBtn || e.target.id === 'lb') {
+    const act = lbBtn ? lbBtn.dataset.lb : 'close', cur = LB;
+    closeLb();
+    if (act === 'replace') { PICK = cur; fileIn.click(); }
+    if (act === 'remove' && confirm('Remove this photo from the shot list?')) {
+      try {
+        await save('clearPhoto', [cur.r, cur.c, cur.t]);
+        setPhoto(cur.r, cur.c, cur.t, '');
+        renderShot(); toast('Photo removed');
+      } catch (_) {}
+    }
+    return;
+  }
+  if (e.target.closest('.vdone')) return; // ticking "Video done" shouldn't open the picture
+  const ph = e.target.closest('[data-ph]');
+  if (ph) {
+    const r = +ph.dataset.r, c = +ph.dataset.c, t = +ph.dataset.t;
+    if (ph.classList.contains('has')) return openLb(r, c, t);
+    arm(r, c, t);
+    if (e.target.closest('[data-upload]')) fileIn.click();
+  }
+});
+
+/* ---------- events ---------- */
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button');
+  if (!t) return;
+  if (t.dataset.tab) {
+    document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b === t));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + t.dataset.tab));
+    if (t.dataset.tab === 'team' && DATA) renderTeam(); // refresh the Shots count from SL 1
+    try { localStorage.setItem('tab', t.dataset.tab); } catch (_) {}
+  } else if (t.dataset.refresh !== undefined) {
+    load();
+  } else if (t.dataset.add) {
+    const k = t.dataset.add, d = DATA[k];
+    let vals = [];
+    if (k === 'sl1') {
+      const nums = d.rows.map(r => parseInt(r.cells[0], 10)).filter(n => !isNaN(n));
+      vals = d.headers.map(h => ({ 'shot #': (nums.length ? Math.max(...nums) : 0) + 1, status: 'Pending' }[String(h).toLowerCase()] ?? ''));
+    } else if (k === 'shot') {
+      vals = d.headers.map(h => String(h).toLowerCase() === 'status' ? 'Pending' : '');
+    }
+    try { DATA[k] = await save('addRow', [k, vals]); renderAll(); toast('Row added'); } catch (_) {}
+  } else if (t.dataset.del) {
+    const k = t.dataset.del, row = +t.dataset.r;
+    if (!confirm(`Delete row ${row} from "${DATA[k].sheet}"? This removes it from the Google Sheet.`)) return;
+    try { DATA[k] = await save('deleteRow', [k, row]); renderAll(); toast('Row deleted'); } catch (_) {}
+  }
+});
+
+document.addEventListener('change', async e => {
+  const el = e.target;
+  if (el.dataset.date !== undefined) {
+    DATA.shot.date = el.value;
+    $('#sub').textContent = el.value ? 'Shoot date: ' + el.value : 'Shoot date not set';
+    return save('setDate', [el.value]).catch(() => {});
+  }
+  if (!el.dataset.k || el.readOnly) return;
+  const k = el.dataset.k, row = +el.dataset.r, c = +el.dataset.c;
+  const rec = DATA[k].rows.find(x => x.row === row);
+  if (rec) rec.cells[c - 1] = el.value;
+  const wrap = el.closest('[data-row]');
+  if (wrap && rec) wrap.dataset.text = rowText(rec);
+  if (el.classList.contains('status')) {
+    el.className = 'status v-' + slug(el.value);
+    if (wrap) wrap.className = wrap.className.replace(/st-[\w-]*/, 'st-' + slug(el.value));
+    refreshProgress(k);
+  }
+  if (k === 'shot' && c <= 2 || k === 'team' && c === 1) renderLists();
+  if (k === 'shot' && c === col(DATA.shot, 'category') + 1) renderShot(); // refresh category chips
+  save('updateCell', [k, row, c, el.value]).catch(() => {});
+});
+
+document.addEventListener('input', e => {
+  const s = e.target.dataset && e.target.dataset.search;
+  if (s === undefined) return;
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll(`#tab-${s} [data-text]`).forEach(n => n.classList.toggle('hidden', !!q && !n.dataset.text.includes(q)));
+});
+
+// Keep everyone in sync on shoot day: quiet refresh every 60s when nobody is typing.
+setInterval(() => {
+  const a = document.activeElement;
+  if (!document.hidden && !pending && !PICK && !LB && !(a && a.matches('input,textarea,select'))) load(true);
+}, 60000);
+
+try {
+  const saved = localStorage.getItem('tab');
+  if (saved) document.querySelector(`nav.tabs button[data-tab="${saved}"]`)?.click();
+} catch (_) {}
+
+/* ---------- sample data for local preview only ---------- */
+const MOCK = (() => {
+  const fac = 'MN-205\nMN-206\nMN-207\nMN-301\nMN-302\nMN-303\nMN-304\nMN-305';
+  const db = {
+    shot: { key: 'shot', sheet: 'Shot List', title: 'CAHS Promotional Shoot – Batch 2 Shot List', date: '', extra: [],
+      headers: ['Time', 'Location', 'Faculty / CI', 'Status', 'Notes', 'CATEGORY', 'CLOSE UP', 'MEDIUEM', 'MEDIM', 'CLOSE UP'],
+      rows: [
+        ['8:00 – 8:30 AM', 'Fundamentals (Funda) Lab', 'Borja / Jay Ann'], ['8:30 – 9:00 AM', 'Anatomy Lab', 'CI:'],
+        ['9:00 – 9:30 AM', 'Mock Hospital', 'CI:'], ['9:30 – 10:00 AM', 'Mock Hospital (cont.)', 'CI:'],
+        ['10:00 – 10:30 AM', 'Classroom (Room: )', fac], ['10:30 – 11:00 AM', 'Classroom (Room: )', fac],
+        ['11:00 – 11:30 AM', 'Classroom (Room: )', fac], ['11:30 AM – 12:00 NN', 'Buffer / Pick-up shots', '—']
+      ].map((c, i) => ({ row: 5 + i, cells: [...c, '', '', i === 0 ? 'NURSING FUNDA' : '', '', '', '', ''],
+        locked: [false, false, i === 5 || i === 6, false, false, false, false, false, false, false], img: Array(10).fill('') })) },
+    team: { key: 'team', sheet: 'TEAM', headers: ['Name', 'Role', 'Contact No.', 'Email', 'Assignment', 'Notes'], rows: [] },
+    sl1: { key: 'sl1', sheet: 'SL 1', headers: ['Shot #', 'Time', 'Location', 'Shot Description', 'Shot Type', 'Camera / Angle', 'Subject / Talent', 'Assigned To', 'Status', 'Notes'], rows: [] }
+  };
+  const ok = v => Promise.resolve(v);
+  return {
+    getData: () => ok(JSON.parse(JSON.stringify(db))),
+    updateCell: (k, r, c, v) => { const x = db[k].rows.find(y => y.row === r); if (x) x.cells[c - 1] = v; return ok(true); },
+    setDate: v => { db.shot.date = v; return ok(true); },
+    uploadPhoto: (r, c, t, name, b64, mime) => ok('data:' + mime + ';base64,' + b64),
+    clearPhoto: () => ok(true),
+    setVideoDone: () => ok(true),
+    addRow: (k, vals) => {
+      const d = db[k], row = d.rows.length ? Math.max(...d.rows.map(r => r.row)) + 1 : (k === 'shot' ? 5 : 2);
+      d.rows.push({ row, cells: d.headers.map((_, i) => vals[i] ?? ''), locked: d.headers.map(() => false) });
+      return ok(JSON.parse(JSON.stringify(d)));
+    },
+    deleteRow: (k, row) => {
+      const d = db[k]; d.rows = d.rows.filter(r => r.row !== row).map(r => r.row > row ? { ...r, row: r.row - 1 } : r);
+      return ok(JSON.parse(JSON.stringify(d)));
+    }
+  };
+})();
+
+load();
+</script>
+</body>
+</html>
